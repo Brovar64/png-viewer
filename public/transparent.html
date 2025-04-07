@@ -23,8 +23,7 @@
         display: block;
         height: 100%;
         width: 100%;
-        overflow: visible;
-        box-sizing: border-box;
+        overflow: hidden;
       }
 
       #png-image {
@@ -39,61 +38,21 @@
         transform-origin: center center;
       }
 
-      #crop-overlay {
-        position: absolute;
-        display: none;
-        top: 0;
-        left: 0;
-        border: 2px dashed #ffffff;
-        background-color: rgba(0, 0, 0, 0.3);
-        box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
-        z-index: 10;
-        pointer-events: none;
+      .crop-mode #png-image {
+        clip-path: inset(50% 0 0 0);
       }
-
-      .crop-handle {
-        position: absolute;
-        width: 12px;
-        height: 12px;
-        background-color: #ffffff;
-        border: 1px solid #000000;
-        pointer-events: all;
-        z-index: 11;
-      }
-
-      .crop-handle-nw { top: -6px; left: -6px; cursor: nw-resize; }
-      .crop-handle-ne { top: -6px; right: -6px; cursor: ne-resize; }
-      .crop-handle-sw { bottom: -6px; left: -6px; cursor: sw-resize; }
-      .crop-handle-se { bottom: -6px; right: -6px; cursor: se-resize; }
-      
-      .crop-handle-n { top: -6px; left: 50%; margin-left: -6px; cursor: n-resize; }
-      .crop-handle-e { top: 50%; right: -6px; margin-top: -6px; cursor: e-resize; }
-      .crop-handle-s { bottom: -6px; left: 50%; margin-left: -6px; cursor: s-resize; }
-      .crop-handle-w { top: 50%; left: -6px; margin-top: -6px; cursor: w-resize; }
     </style>
   </head>
   <body>
     <div id="image-container">
       <img id="png-image" alt="PNG Image" />
-      <div id="crop-overlay">
-        <div class="crop-handle crop-handle-nw"></div>
-        <div class="crop-handle crop-handle-n"></div>
-        <div class="crop-handle crop-handle-ne"></div>
-        <div class="crop-handle crop-handle-e"></div>
-        <div class="crop-handle crop-handle-se"></div>
-        <div class="crop-handle crop-handle-s"></div>
-        <div class="crop-handle crop-handle-sw"></div>
-        <div class="crop-handle crop-handle-w"></div>
-      </div>
     </div>
     <canvas id="hit-test-canvas" style="display: none;"></canvas>
 
     <script>
       // Get elements
       const imageEl = document.getElementById('png-image');
-      const imageContainer = document.getElementById('image-container');
       const hitTestCanvas = document.getElementById('hit-test-canvas');
-      const cropOverlay = document.getElementById('crop-overlay');
       const ctx = hitTestCanvas.getContext('2d');
       
       let isOverNonTransparentPixel = false;
@@ -114,22 +73,8 @@
       const maxScale = 10;
       const scaleStep = 0.1;
 
-      // For image crop mode
-      let cropMode = false;
-      let isCropping = false;
-      let cropStartX = 0;
-      let cropStartY = 0;
-      let cropEndX = 0;
-      let cropEndY = 0;
-      let activeCropHandle = null;
-      
-      // For resize window to fit image
-      let originalWidth = 0;
-      let originalHeight = 0;
-
-      // Adjustable image position
-      let imageX = 0;
-      let imageY = 0;
+      // For image cutout mode
+      let cutoutMode = false;
 
       // Listen for image data from the main process
       window.transparentWindow.loadImage(({ imageData, imagePath: path }) => {
@@ -139,143 +84,34 @@
         
         // Once image is loaded, prepare hit-testing canvas
         imageEl.onload = () => {
-          // Store original dimensions
-          originalWidth = imageEl.naturalWidth;
-          originalHeight = imageEl.naturalHeight;
-          
           // Size canvas to match image
-          hitTestCanvas.width = originalWidth;
-          hitTestCanvas.height = originalHeight;
+          hitTestCanvas.width = imageEl.naturalWidth;
+          hitTestCanvas.height = imageEl.naturalHeight;
           
           // Draw the image onto the canvas for pixel data access
           ctx.drawImage(imageEl, 0, 0);
 
-          // Center the image initially
-          centerImage();
-
           // Apply initial scale
-          applyTransform();
+          applyScale();
 
           // Initialize tracking
           initializeInteractions();
-          
-          // Resize window to fit image better
-          if (originalWidth > 100 && originalHeight > 100) {
-            window.transparentWindow.resizeWindow(
-              Math.min(originalWidth + 100, 1200),
-              Math.min(originalHeight + 100, 900)
-            );
-          }
         };
       });
 
-      // Center the image in the container
-      function centerImage() {
-        const containerRect = imageContainer.getBoundingClientRect();
-        imageX = (containerRect.width - imageEl.width) / 2;
-        imageY = (containerRect.height - imageEl.height) / 2;
+      // Apply the current scale to the image
+      function applyScale() {
+        imageEl.style.transform = `scale(${scale})`;
       }
 
-      // Apply current scale and position to the image
-      function applyTransform() {
-        imageEl.style.transform = `translate(${imageX}px, ${imageY}px) scale(${scale})`;
-      }
-
-      // Toggle crop mode
-      function toggleCropMode() {
-        cropMode = !cropMode;
-        
-        if (cropMode) {
-          // Enter crop mode
-          const rect = imageEl.getBoundingClientRect();
-          cropOverlay.style.display = 'block';
-          
-          // Start with default crop area (centered 50% of image)
-          cropStartX = rect.left + rect.width * 0.25;
-          cropStartY = rect.top + rect.height * 0.25;
-          cropEndX = rect.left + rect.width * 0.75;
-          cropEndY = rect.top + rect.height * 0.75;
-          
-          updateCropOverlay();
+      // Toggle cutout mode
+      function toggleCutoutMode() {
+        cutoutMode = !cutoutMode;
+        if (cutoutMode) {
+          document.body.classList.add('crop-mode');
         } else {
-          // Exit crop mode
-          cropOverlay.style.display = 'none';
+          document.body.classList.remove('crop-mode');
         }
-      }
-      
-      // Physically crop the window to the selected area
-      function applyCrop() {
-        if (!cropMode) return;
-        
-        // Get crop dimensions
-        const left = Math.min(cropStartX, cropEndX);
-        const top = Math.min(cropStartY, cropEndY);
-        const width = Math.abs(cropEndX - cropStartX);
-        const height = Math.abs(cropEndY - cropStartY);
-        
-        if (width < 50 || height < 50) {
-          console.error('Crop area too small');
-          return;
-        }
-        
-        const imageRect = imageEl.getBoundingClientRect();
-        
-        // Calculate the scale factor between the window and the displayed image
-        const scaleFactorX = originalWidth / (imageRect.width / scale);
-        const scaleFactorY = originalHeight / (imageRect.height / scale);
-        
-        // Convert crop area coordinates to image coordinates
-        const cropImageX = (left - imageRect.left) * scaleFactorX / scale;
-        const cropImageY = (top - imageRect.top) * scaleFactorY / scale;
-        const cropImageWidth = width * scaleFactorX / scale;
-        const cropImageHeight = height * scaleFactorY / scale;
-        
-        // Create a new canvas for the cropped image
-        const cropCanvas = document.createElement('canvas');
-        cropCanvas.width = cropImageWidth;
-        cropCanvas.height = cropImageHeight;
-        const cropCtx = cropCanvas.getContext('2d');
-        
-        // Draw only the cropped portion
-        cropCtx.drawImage(
-          hitTestCanvas, 
-          cropImageX, 
-          cropImageY, 
-          cropImageWidth, 
-          cropImageHeight,
-          0, 
-          0, 
-          cropImageWidth, 
-          cropImageHeight
-        );
-        
-        // Convert to base64
-        const croppedImageData = cropCanvas.toDataURL('image/png');
-        
-        // Update the window to show only the cropped part
-        try {
-          window.transparentWindow.updateCroppedImage(croppedImageData, width, height);
-          
-          // Reset crop mode
-          cropMode = false;
-          cropOverlay.style.display = 'none';
-        } catch (error) {
-          console.error('Error applying crop:', error);
-        }
-      }
-
-      // Update the crop overlay position and dimensions
-      function updateCropOverlay() {
-        // Ensure start position is always top-left corner
-        const left = Math.min(cropStartX, cropEndX);
-        const top = Math.min(cropStartY, cropEndY);
-        const width = Math.abs(cropEndX - cropStartX);
-        const height = Math.abs(cropEndY - cropStartY);
-        
-        cropOverlay.style.left = `${left}px`;
-        cropOverlay.style.top = `${top}px`;
-        cropOverlay.style.width = `${width}px`;
-        cropOverlay.style.height = `${height}px`;
       }
 
       // Check if a pixel at the given coordinates is transparent
@@ -316,76 +152,10 @@
           return true; // Assume transparent on error
         }
       }
-      
-      // Crop handle events
-      function initializeCropHandles() {
-        const handles = document.querySelectorAll('.crop-handle');
-        
-        handles.forEach(handle => {
-          handle.addEventListener('mousedown', (e) => {
-            if (!cropMode) return;
-            
-            e.stopPropagation();
-            e.preventDefault();
-            
-            activeCropHandle = handle.className.split(' ')[1];
-            isCropping = true;
-          });
-        });
-      }
-      
-      // Update crop based on handle drag
-      function updateCropFromHandle(e) {
-        if (!activeCropHandle) return;
-        
-        const cropRect = cropOverlay.getBoundingClientRect();
-        
-        switch (activeCropHandle) {
-          case 'crop-handle-nw':
-            cropStartX = e.clientX;
-            cropStartY = e.clientY;
-            break;
-          case 'crop-handle-ne':
-            cropEndX = e.clientX;
-            cropStartY = e.clientY;
-            break;
-          case 'crop-handle-se':
-            cropEndX = e.clientX;
-            cropEndY = e.clientY;
-            break;
-          case 'crop-handle-sw':
-            cropStartX = e.clientX;
-            cropEndY = e.clientY;
-            break;
-          case 'crop-handle-n':
-            cropStartY = e.clientY;
-            break;
-          case 'crop-handle-e':
-            cropEndX = e.clientX;
-            break;
-          case 'crop-handle-s':
-            cropEndY = e.clientY;
-            break;
-          case 'crop-handle-w':
-            cropStartX = e.clientX;
-            break;
-        }
-        
-        updateCropOverlay();
-      }
 
       function initializeInteractions() {
-        // Initialize crop handles
-        initializeCropHandles();
-        
         // Handle mouse move for pixel transparency detection and dragging
         document.addEventListener('mousemove', (e) => {
-          // Handle crop resizing
-          if (isCropping && cropMode) {
-            updateCropFromHandle(e);
-            return;
-          }
-          
           // If dragging is in progress, always move the window regardless of current pixel
           if (isDragging) {
             try {
@@ -406,27 +176,12 @@
           // Not dragging, just check if we're over a non-transparent pixel
           isOverNonTransparentPixel = !isPixelTransparent(e.clientX, e.clientY);
           
-          // Update cursor based on transparency (unless in crop mode)
-          if (!cropMode) {
-            document.body.style.cursor = isOverNonTransparentPixel ? 'move' : 'default';
-          }
+          // Update cursor based on transparency
+          document.body.style.cursor = isOverNonTransparentPixel ? 'move' : 'default';
         });
 
         // Initialize window dragging
         document.addEventListener('mousedown', (e) => {
-          // Don't start window drag if in crop mode
-          if (cropMode) {
-            // Start a new crop area
-            if (!isCropping && cropOverlay.style.display === 'block') {
-              cropStartX = e.clientX;
-              cropStartY = e.clientY;
-              cropEndX = e.clientX;
-              cropEndY = e.clientY;
-              isCropping = true;
-            }
-            return;
-          }
-          
           initialClickOnNonTransparent = !isPixelTransparent(e.clientX, e.clientY);
           
           if (initialClickOnNonTransparent) {
@@ -453,18 +208,7 @@
         });
 
         // Handle drag end
-        window.addEventListener('mouseup', (e) => {
-          if (isCropping) {
-            // Finish crop
-            isCropping = false;
-            activeCropHandle = null;
-            
-            // Only create a valid crop area if big enough
-            if (Math.abs(cropEndX - cropStartX) > 10 && Math.abs(cropEndY - cropStartY) > 10) {
-              updateCropOverlay();
-            }
-          }
-          
+        window.addEventListener('mouseup', () => {
           isDragging = false;
           initialClickOnNonTransparent = false;
         });
@@ -473,59 +217,26 @@
         window.addEventListener('blur', () => {
           isDragging = false;
           initialClickOnNonTransparent = false;
-          isCropping = false;
-          activeCropHandle = null;
         });
         
-        // Listen for key press
+        // Listen for key press to close window (only when over non-transparent pixels)
         document.addEventListener('keydown', (e) => {
-          // Only handle keyboard shortcuts when over the image
-          if (!isOverNonTransparentPixel && !cropMode) return;
-          
-          // Close with 'W' key
-          if (e.key.toLowerCase() === 'w') {
+          if (e.key.toLowerCase() === 'w' && isOverNonTransparentPixel) {
             window.transparentWindow.close();
           }
-          
-          // Toggle crop mode with 'R' key
-          if (e.key.toLowerCase() === 'r') {
-            toggleCropMode();
-          }
-          
-          // Apply crop with Enter key
-          if (e.key === 'Enter' && cropMode) {
-            applyCrop();
-          }
-          
-          // Cancel crop with Escape key
-          if (e.key === 'Escape' && cropMode) {
-            cropMode = false;
-            cropOverlay.style.display = 'none';
+
+          if (e.key.toLowerCase() === 'r' && isOverNonTransparentPixel) {
+            toggleCutoutMode();
           }
         });
 
         // Add mouse wheel event for zooming
         document.addEventListener('wheel', (e) => {
-          // Don't zoom when in crop mode
-          if (cropMode) return;
-          
           if (isOverNonTransparentPixel) {
             // Prevent default scrolling behavior
             e.preventDefault();
             
-            // Save current mouse position relative to image before scaling
-            const rect = imageEl.getBoundingClientRect();
-            const mouseX = e.clientX - rect.left;
-            const mouseY = e.clientY - rect.top;
-            const mouseXRatio = mouseX / rect.width;
-            const mouseYRatio = mouseY / rect.height;
-            
-            // Previous dimensions
-            const prevWidth = rect.width;
-            const prevHeight = rect.height;
-            
             // Calculate new scale based on wheel direction
-            const oldScale = scale;
             if (e.deltaY < 0) {
               // Scroll up - zoom in
               scale = Math.min(scale + scaleStep, maxScale);
@@ -534,22 +245,8 @@
               scale = Math.max(scale - scaleStep, minScale);
             }
             
-            // Calculate how the dimensions will change
-            const scaleFactor = scale / oldScale;
-            const newWidth = prevWidth * scaleFactor;
-            const newHeight = prevHeight * scaleFactor;
-            
-            // Adjust position to zoom toward mouse pointer
-            imageX -= (newWidth - prevWidth) * mouseXRatio;
-            imageY -= (newHeight - prevHeight) * mouseYRatio;
-            
-            // Apply the new transform
-            applyTransform();
-            
-            // If in crop mode, update the overlay
-            if (cropMode) {
-              updateCropOverlay();
-            }
+            // Apply the new scale
+            applyScale();
           }
         }, { passive: false });
       }
