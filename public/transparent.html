@@ -20,20 +20,20 @@
 
       #image-container {
         position: absolute;
-        display: block;
+        display: flex;
+        justify-content: center;
+        align-items: center;
         height: 100%;
         width: 100%;
         overflow: visible;
+        background: transparent;
       }
 
       #png-image {
-        position: absolute;
+        position: relative;
         display: none;
-        margin: auto;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
+        max-width: none;
+        max-height: none;
         -webkit-user-drag: none;
         transform-origin: center center;
       }
@@ -56,8 +56,6 @@
       
       // For dragging
       let isDragging = false;
-      let dragStartX = 0;
-      let dragStartY = 0;
       let dragOffsetX = 0;
       let dragOffsetY = 0;
       let initialClickOnNonTransparent = false;
@@ -74,7 +72,7 @@
         imageEl.src = imageData;
         imageEl.style.display = 'block';
         
-        // Once image is loaded, prepare hit-testing canvas
+        // Once image is loaded, prepare hit-testing canvas and initial sizing
         imageEl.onload = () => {
           // Size canvas to match image
           hitTestCanvas.width = imageEl.naturalWidth;
@@ -83,30 +81,33 @@
           // Draw the image onto the canvas for pixel data access
           ctx.drawImage(imageEl, 0, 0);
 
-          // Apply initial scale
-          applyScale();
-
-          // Initialize tracking
-          initializeInteractions();
+          // Set a small initial timeout to ensure proper initial sizing
+          setTimeout(() => {
+            // Tell main process about the actual image dimensions for initial sizing
+            const initialWidth = Math.min(imageEl.naturalWidth, 800);
+            const initialHeight = Math.min(imageEl.naturalHeight, 600);
+            window.transparentWindow.resizeWindow(initialWidth, initialHeight);
+            
+            // Apply initial scale
+            applyScale();
+  
+            // Initialize tracking
+            initializeInteractions();
+          }, 50);
         };
       });
 
-      // Apply the current scale to the image and resize window if needed
+      // Apply the current scale to the image and resize window
       function applyScale() {
+        // Apply the scale transform
         imageEl.style.transform = `scale(${scale})`;
         
-        // Calculate new dimensions based on scale and notify main process to resize window
-        const scaledWidth = Math.ceil(imageEl.naturalWidth * scale);
-        const scaledHeight = Math.ceil(imageEl.naturalHeight * scale);
+        // Calculate dimensions with current scale
+        const scaledWidth = Math.ceil(imageEl.naturalWidth * scale) + 40;  // Add padding
+        const scaledHeight = Math.ceil(imageEl.naturalHeight * scale) + 40; // Add padding
         
-        // Only request resize if dimensions have changed significantly (by at least 20px)
-        const rect = imageEl.getBoundingClientRect();
-        const currentWidth = rect.width;
-        const currentHeight = rect.height;
-        
-        if (Math.abs(scaledWidth - currentWidth) > 20 || Math.abs(scaledHeight - currentHeight) > 20) {
-          window.transparentWindow.resizeWindow(scaledWidth, scaledHeight);
-        }
+        // Request window resize to fit the scaled image
+        window.transparentWindow.resizeWindow(scaledWidth, scaledHeight);
       }
 
       // Check if a pixel at the given coordinates is transparent
