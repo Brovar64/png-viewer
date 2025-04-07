@@ -8,7 +8,7 @@ An Electron + React application for browsing PNG files in a selected folder.
 - Display thumbnails of PNG images
 - Show image file name and size
 - Zoom in/out of images using the mouse wheel (improved zooming centered on cursor)
-- Create cutout effect with "R" key for creative image presentations
+- Real crop feature using "R" key that physically crops the window to selected area
 - Drag transparent PNGs by their visible parts
 - Simple and intuitive user interface
 
@@ -40,7 +40,16 @@ The application will launch and you can click the "Select PNG Folder" button to 
 - Use the mouse wheel to zoom in/out of the image (zoom centers on cursor position)
 - Drag the image by clicking and holding on any non-transparent part
 - Press 'W' key while hovering over the image to close the window
-- Press 'R' key to toggle the cutout mode (shows only the top half of the image)
+
+### Using the Crop Tool
+
+1. Press 'R' key to activate the crop tool
+2. Draw a crop region by clicking and dragging on the image
+3. Adjust the crop by dragging the handles on the corners and edges
+4. Press 'Enter' to apply the crop - this will physically resize the window to show only the cropped area
+5. Press 'Escape' to cancel the crop operation
+
+This real crop tool is perfect for creating cutout effects for reception desks or other creative presentations, as it physically crops the window to match the selected area.
 
 ## Building for Production
 
