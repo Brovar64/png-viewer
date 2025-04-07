@@ -156,6 +156,48 @@ function setupTransparentWindowHandlers() {
       console.error('Error in window:drag handler:', error);
     }
   });
+  
+  // Handle window resize
+  ipcMain.on('window:resize', (event, width, height) => {
+    try {
+      const webContents = event.sender;
+      const win = BrowserWindow.fromWebContents(webContents);
+      
+      if (!win) return;
+      
+      // Get current position
+      const [x, y] = win.getPosition();
+      
+      // Validate width and height
+      const newWidth = Number(width);
+      const newHeight = Number(height);
+      
+      if (isNaN(newWidth) || isNaN(newHeight)) {
+        console.error('Invalid dimensions in window:resize', width, height);
+        return;
+      }
+      
+      // Get screen size
+      const { width: screenWidth, height: screenHeight } = screen.getPrimaryDisplay().workAreaSize;
+      
+      // Limit size to screen dimensions
+      const limitedWidth = Math.min(newWidth, screenWidth);
+      const limitedHeight = Math.min(newHeight, screenHeight);
+      
+      // Resize the window
+      win.setSize(Math.round(limitedWidth), Math.round(limitedHeight));
+      
+      // Re-center window if necessary
+      const [newX, newY] = [
+        Math.round(x - (limitedWidth - win.getSize()[0]) / 2),
+        Math.round(y - (limitedHeight - win.getSize()[1]) / 2)
+      ];
+      
+      win.setPosition(newX, newY);
+    } catch (error) {
+      console.error('Error in window:resize handler:', error);
+    }
+  });
 
   // Handle window close
   ipcMain.on('window:close', (event) => {
