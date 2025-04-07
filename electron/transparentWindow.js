@@ -126,13 +126,35 @@ function setupTransparentWindowHandlers() {
     event.returnValue = true;
   });
   
-  ipcMain.on('window:drag', (event, { mouseX, mouseY, offsetX, offsetY }) => {
-    const webContents = event.sender;
-    const win = BrowserWindow.fromWebContents(webContents);
-    if (!win) return;
-    
-    // Set the window position based on mouse position and offset
-    win.setPosition(mouseX - offsetX, mouseY - offsetY);
+  // Improved drag handler with more defensive checks and type coercion
+  ipcMain.on('window:drag', (event, args) => {
+    try {
+      // Safety checks and number conversion
+      if (!args || typeof args !== 'object') {
+        console.error('Invalid argument format in window:drag');
+        return;
+      }
+      
+      const mouseX = Number(args.mouseX);
+      const mouseY = Number(args.mouseY);
+      const offsetX = Number(args.offsetX);
+      const offsetY = Number(args.offsetY);
+      
+      // Validate that all values are numbers
+      if (isNaN(mouseX) || isNaN(mouseY) || isNaN(offsetX) || isNaN(offsetY)) {
+        console.error('Invalid coordinates in window:drag', args);
+        return;
+      }
+      
+      const webContents = event.sender;
+      const win = BrowserWindow.fromWebContents(webContents);
+      if (!win) return;
+      
+      // Set the window position based on mouse position and offset
+      win.setPosition(Math.round(mouseX - offsetX), Math.round(mouseY - offsetY));
+    } catch (error) {
+      console.error('Error in window:drag handler:', error);
+    }
   });
 
   // Handle window close
