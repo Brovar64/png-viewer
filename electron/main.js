@@ -9,6 +9,9 @@ app.disableHardwareAcceleration();
 
 let mainWindow;
 
+/**
+ * Create the main application window
+ */
 function createWindow() {
   console.log('Creating main application window');
   
@@ -41,81 +44,97 @@ function createWindow() {
   });
 }
 
-// Set up IPC handlers first
-console.log('Setting up main process IPC handlers');
+/**
+ * Initialize all IPC handlers
+ */
+function setupIPCHandlers() {
+  console.log('Setting up main process IPC handlers');
 
-// Directory and file operations
-ipcMain.handle('dialog:openDirectory', async (event) => {
-  console.log('Handling dialog:openDirectory request');
-  const { canceled, filePaths } = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender), {
-    properties: ['openDirectory']
-  });
-  
-  if (canceled) {
-    console.log('Directory selection canceled');
-    return { canceled };
-  }
-  
-  console.log(`Directory selected: ${filePaths[0]}`);
-  return { canceled, filePath: filePaths[0] };
-});
-
-ipcMain.handle('fs:readDirectory', async (_, directoryPath) => {
-  console.log(`Reading directory: ${directoryPath}`);
-  try {
-    const files = await fs.promises.readdir(directoryPath);
-    const pngFiles = [];
+  // Directory selection dialog
+  ipcMain.handle('dialog:openDirectory', async (event) => {
+    console.log('Handling dialog:openDirectory request');
+    const sender = event.sender;
+    const win = sender ? BrowserWindow.fromWebContents(sender) : mainWindow;
     
-    for (const file of files) {
-      const filePath = path.join(directoryPath, file);
-      const stats = await fs.promises.stat(filePath);
-      
-      if (stats.isFile() && file.toLowerCase().endsWith('.png')) {
-        pngFiles.push({
-          name: file,
-          path: filePath,
-          size: stats.size
-        });
-      }
+    const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+      properties: ['openDirectory']
+    });
+    
+    if (canceled) {
+      console.log('Directory selection canceled');
+      return { canceled };
     }
     
-    console.log(`Found ${pngFiles.length} PNG files in ${directoryPath}`);
-    return pngFiles;
-  } catch (err) {
-    console.error('Failed to read directory:', err);
-    throw err;
-  }
-});
+    console.log(`Directory selected: ${filePaths[0]}`);
+    return { canceled, filePath: filePaths[0] };
+  });
 
-ipcMain.handle('fs:readFile', async (_, filePath) => {
-  console.log(`Reading file: ${filePath}`);
-  try {
-    const data = await fs.promises.readFile(filePath);
-    console.log(`File read successfully: ${filePath} (${data.length} bytes)`);
-    return data.toString('base64');
-  } catch (err) {
-    console.error('Failed to read file:', err);
-    throw err;
-  }
-});
+  // Read directory contents
+  ipcMain.handle('fs:readDirectory', async (_, directoryPath) => {
+    console.log(`Reading directory: ${directoryPath}`);
+    try {
+      const files = await fs.promises.readdir(directoryPath);
+      const pngFiles = [];
+      
+      for (const file of files) {
+        const filePath = path.join(directoryPath, file);
+        const stats = await fs.promises.stat(filePath);
+        
+        if (stats.isFile() && file.toLowerCase().endsWith('.png')) {
+          pngFiles.push({
+            name: file,
+            path: filePath,
+            size: stats.size
+          });
+        }
+      }
+      
+      console.log(`Found ${pngFiles.length} PNG files in ${directoryPath}`);
+      return pngFiles;
+    } catch (err) {
+      console.error('Failed to read directory:', err);
+      throw err;
+    }
+  });
 
-// Initialize transparent window handlers
-console.log('Initializing transparent window handlers');
-setupTransparentWindowHandlers();
+  // Read file contents
+  ipcMain.handle('fs:readFile', async (_, filePath) => {
+    console.log(`Reading file: ${filePath}`);
+    try {
+      const data = await fs.promises.readFile(filePath);
+      console.log(`File read successfully: ${filePath} (${data.length} bytes)`);
+      return data.toString('base64');
+    } catch (err) {
+      console.error('Failed to read file:', err);
+      throw err;
+    }
+  });
 
-// Log registered handlers
-console.log('Main IPC handlers:', ['dialog:openDirectory', 'fs:readDirectory', 'fs:readFile']);
+  // Setup transparent window handlers
+  console.log('Initializing transparent window handlers');
+  setupTransparentWindowHandlers();
 
-// List all registered handlers
-const registeredHandlers = ipcMain.eventNames();
-console.log('All registered IPC handlers:', registeredHandlers);
+  // Log registered handlers
+  const mainHandlers = ['dialog:openDirectory', 'fs:readDirectory', 'fs:readFile'];
+  const windowHandlers = ['window:openTransparent', 'window:openTransparentFile', 'window:dragStart', 'window:drag', 'window:close'];
+  
+  console.log('Main process handlers:', mainHandlers);
+  console.log('Window handlers:', windowHandlers);
+  console.log('All registered IPC handlers:', ipcMain.eventNames());
+}
 
+// Wait for app to be ready
 app.whenReady().then(() => {
   console.log('Electron app is ready');
+  
+  // Setup IPC handlers first
+  setupIPCHandlers();
+  
+  // Then create the window
   createWindow();
   
-  // Check handlers again after app is ready
-  console.log('IPC handlers after app ready:', ipcMain.eventNames());
+  // Check handlers after everything is initialized
+  console.log('IPC handlers after initialization:', ipcMain.eventNames());
 });
 
 app.on('window-all-closed', () => {
@@ -130,4 +149,9 @@ app.on('activate', () => {
   if (mainWindow === null) {
     createWindow();
   }
+});
+
+// Log any uncaught errors
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught exception:', error);
 });
