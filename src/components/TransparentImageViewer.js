@@ -162,9 +162,12 @@ function TransparentImageViewer({ imageData }) {
 
   return (
     <div 
-      className="h-screen w-screen bg-transparent overflow-hidden"
+      className="h-screen w-screen overflow-hidden select-none"
       onMouseMove={handleMouseMove}
-      style={{ cursor: isOverImage ? 'move' : 'default' }}
+      style={{ 
+        cursor: isOverImage ? 'move' : 'default',
+        background: 'transparent' 
+      }}
     >
       <TransformWrapper
         initialScale={1}
@@ -175,19 +178,42 @@ function TransparentImageViewer({ imageData }) {
         disablePadding={true}
         disabled={isDragging}
       >
-        <TransformComponent
-          wrapperStyle={{ width: '100%', height: '100%', background: 'transparent' }}
-          contentStyle={{ background: 'transparent' }}
-        >
-          <img
-            ref={imageRef}
-            src={imageData}
-            alt="Transparent PNG"
-            onLoad={setupCanvas}
-            onMouseDown={handleMouseDown}
-            style={{ userSelect: 'none', WebkitUserDrag: 'none' }}
-          />
-        </TransformComponent>
+        {({ zoomIn, zoomOut, resetTransform }) => (
+          <>
+            <TransformComponent
+              wrapperStyle={{ 
+                width: '100%', 
+                height: '100%', 
+                background: 'transparent'
+              }}
+              contentStyle={{ 
+                background: 'transparent'
+              }}
+            >
+              <img
+                ref={imageRef}
+                src={imageData}
+                alt="Transparent PNG"
+                onLoad={setupCanvas}
+                onMouseDown={handleMouseDown}
+                style={{ 
+                  userSelect: 'none', 
+                  WebkitUserDrag: 'none',
+                  background: 'transparent'
+                }}
+              />
+            </TransformComponent>
+
+            {/* Add debug button in dev mode */}
+            {process.env.NODE_ENV === 'development' && (
+              <div className="absolute bottom-4 right-4 flex gap-2">
+                <button onClick={() => zoomIn()} className="bg-blue-500 text-white p-2 rounded opacity-50 hover:opacity-100">+</button>
+                <button onClick={() => zoomOut()} className="bg-blue-500 text-white p-2 rounded opacity-50 hover:opacity-100">-</button>
+                <button onClick={() => resetTransform()} className="bg-blue-500 text-white p-2 rounded opacity-50 hover:opacity-100">Reset</button>
+              </div>
+            )}
+          </>
+        )}
       </TransformWrapper>
       
       {/* Hidden canvas for hit testing */}
