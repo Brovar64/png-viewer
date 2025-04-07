@@ -7,6 +7,8 @@ An Electron + React application for browsing PNG files in a selected folder.
 - Select a folder to browse PNG files
 - Display thumbnails of PNG images
 - Show image file name and size
+- Zoom in/out of images using the mouse wheel
+- Drag transparent PNGs by their visible parts
 - Simple and intuitive user interface
 
 ## Installation
@@ -30,6 +32,13 @@ npm start
 ```
 
 The application will launch and you can click the "Select PNG Folder" button to browse your directories and view PNG files.
+
+### Viewing and Interacting with Images
+
+- Click on any thumbnail to open the image in a dedicated transparent window
+- Use the mouse wheel to zoom in/out of the image
+- Drag the image by clicking and holding on any non-transparent part
+- Press 'W' key while hovering over the image to close the window
 
 ## Building for Production
 
