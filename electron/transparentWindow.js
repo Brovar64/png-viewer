@@ -74,11 +74,7 @@ function setupTransparentWindowHandlers() {
 
   // Handle window dragging using manual positioning
   ipcMain.on('window:dragStart', (event) => {
-    const webContents = event.sender;
-    const win = BrowserWindow.fromWebContents(webContents);
-    if (!win) return;
-    
-    // Just acknowledge that dragging has started
+    // Just acknowledge the drag start
     event.returnValue = true;
   });
   
@@ -87,8 +83,7 @@ function setupTransparentWindowHandlers() {
     const win = BrowserWindow.fromWebContents(webContents);
     if (!win) return;
     
-    // Calculate new position
-    const [x, y] = win.getPosition();
+    // Set the window position based on mouse position and offset
     win.setPosition(mouseX - offsetX, mouseY - offsetY);
   });
 
