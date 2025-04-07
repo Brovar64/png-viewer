@@ -7,7 +7,7 @@ An Electron + React application for browsing PNG files in a selected folder.
 - Select a folder to browse PNG files
 - Display thumbnails of PNG images
 - Show image file name and size
-- Zoom in/out of images using the mouse wheel
+- Enhanced zooming and panning with react-zoom-pan-pinch
 - Drag transparent PNGs by their visible parts
 - Simple and intuitive user interface
 
@@ -36,9 +36,16 @@ The application will launch and you can click the "Select PNG Folder" button to 
 ### Viewing and Interacting with Images
 
 - Click on any thumbnail to open the image in a dedicated transparent window
-- Use the mouse wheel to zoom in/out of the image
+- Use the mouse wheel to zoom in/out of the image without cropping issues
 - Drag the image by clicking and holding on any non-transparent part
 - Press 'W' key while hovering over the image to close the window
+
+## Recent Improvements
+
+- Fixed the image cropping issue when zooming in too much
+- Implemented react-zoom-pan-pinch for smooth zooming without edge constraints
+- Maintained the transparent window functionality for proper PNG display
+- Improved zoom behavior and performance
 
 ## Building for Production
 
@@ -54,6 +61,7 @@ The packaged application will be available in the `dist` directory.
 - Electron: Desktop application framework
 - React: UI library
 - TailwindCSS: Utility-first CSS framework
+- react-zoom-pan-pinch: Advanced zooming and panning library
 
 ## License
 
