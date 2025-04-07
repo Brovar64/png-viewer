@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const isDev = require('electron-is-dev');
+const { setupTransparentWindowHandlers } = require('./transparentWindow');
 
 // Disable GPU acceleration to prevent GPU process errors
 app.disableHardwareAcceleration();
@@ -35,7 +36,10 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  createWindow();
+  setupTransparentWindowHandlers();
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
