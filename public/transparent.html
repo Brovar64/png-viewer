@@ -15,7 +15,6 @@
       }
 
       body {
-        -webkit-app-region: no-drag;
         user-select: none;
       }
 
@@ -39,10 +38,6 @@
         bottom: 0;
         -webkit-user-drag: none;
       }
-
-      .draggable {
-        -webkit-app-region: drag;
-      }
     </style>
   </head>
   <body>
@@ -59,6 +54,11 @@
       
       let isOverNonTransparentPixel = false;
       let imagePath = '';
+      
+      // For dragging
+      let isDragging = false;
+      let dragOffsetX = 0;
+      let dragOffsetY = 0;
 
       // Listen for image data from the main process
       window.transparentWindow.loadImage(({ imageData, imagePath: path }) => {
@@ -94,7 +94,6 @@
             // Mouse is outside image bounds
             isOverNonTransparentPixel = false;
             document.body.style.cursor = 'default';
-            imageEl.classList.remove('draggable');
             return;
           }
 
@@ -108,13 +107,21 @@
           // Check alpha channel (index 3) for transparency
           isOverNonTransparentPixel = pixelData[3] > 0;
           
-          // Update cursor and draggable state based on transparency
+          // Update cursor based on transparency
           if (isOverNonTransparentPixel) {
             document.body.style.cursor = 'move';
-            imageEl.classList.add('draggable');
           } else {
             document.body.style.cursor = 'default';
-            imageEl.classList.remove('draggable');
+          }
+          
+          // Handle dragging motion
+          if (isDragging && isOverNonTransparentPixel) {
+            window.transparentWindow.drag(
+              e.screenX, 
+              e.screenY, 
+              dragOffsetX, 
+              dragOffsetY
+            );
           }
         });
       }
@@ -126,19 +133,31 @@
         }
       });
 
-      // Window interactions
-      let isDragging = false;
-
-      // Start drag on mousedown if over non-transparent part
+      // Window dragging with manual positioning
       document.addEventListener('mousedown', (e) => {
-        // Only allow starting drag on non-transparent pixels
         if (isOverNonTransparentPixel) {
+          // Start drag if clicked on non-transparent pixel
           isDragging = true;
+          
+          // Store the current mouse position and offset
+          const rect = imageEl.getBoundingClientRect();
+          dragOffsetX = e.clientX - rect.left;
+          dragOffsetY = e.clientY - rect.top;
+          
           window.transparentWindow.startDrag();
+          
+          // Prevent default behaviors
+          e.preventDefault();
         }
       });
 
+      // Stop dragging on mouse up
       document.addEventListener('mouseup', () => {
+        isDragging = false;
+      });
+      
+      // Also stop dragging if mouse leaves the window
+      document.addEventListener('mouseleave', () => {
         isDragging = false;
       });
     </script>
