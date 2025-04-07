@@ -23,7 +23,7 @@
         display: block;
         height: 100%;
         width: 100%;
-        overflow: hidden;
+        overflow: visible;
       }
 
       #png-image {
@@ -52,6 +52,7 @@
     <script>
       // Get elements
       const imageEl = document.getElementById('png-image');
+      const imageContainer = document.getElementById('image-container');
       const hitTestCanvas = document.getElementById('hit-test-canvas');
       const ctx = hitTestCanvas.getContext('2d');
       
@@ -75,6 +76,10 @@
 
       // For image cutout mode
       let cutoutMode = false;
+      
+      // Adjustable image position
+      let imageX = 0;
+      let imageY = 0;
 
       // Listen for image data from the main process
       window.transparentWindow.loadImage(({ imageData, imagePath: path }) => {
@@ -91,17 +96,27 @@
           // Draw the image onto the canvas for pixel data access
           ctx.drawImage(imageEl, 0, 0);
 
-          // Apply initial scale
-          applyScale();
+          // Center the image initially
+          centerImage();
+
+          // Apply initial transform
+          applyTransform();
 
           // Initialize tracking
           initializeInteractions();
         };
       });
 
-      // Apply the current scale to the image
-      function applyScale() {
-        imageEl.style.transform = `scale(${scale})`;
+      // Center the image in the container
+      function centerImage() {
+        const containerRect = imageContainer.getBoundingClientRect();
+        imageX = (containerRect.width - imageEl.width) / 2;
+        imageY = (containerRect.height - imageEl.height) / 2;
+      }
+
+      // Apply the current scale and position to the image
+      function applyTransform() {
+        imageEl.style.transform = `translate(${imageX}px, ${imageY}px) scale(${scale})`;
       }
 
       // Toggle cutout mode
@@ -236,7 +251,19 @@
             // Prevent default scrolling behavior
             e.preventDefault();
             
+            // Save current mouse position relative to image before scaling
+            const rect = imageEl.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            const mouseXRatio = mouseX / rect.width;
+            const mouseYRatio = mouseY / rect.height;
+            
+            // Previous dimensions
+            const prevWidth = rect.width;
+            const prevHeight = rect.height;
+            
             // Calculate new scale based on wheel direction
+            const oldScale = scale;
             if (e.deltaY < 0) {
               // Scroll up - zoom in
               scale = Math.min(scale + scaleStep, maxScale);
@@ -245,8 +272,17 @@
               scale = Math.max(scale - scaleStep, minScale);
             }
             
-            // Apply the new scale
-            applyScale();
+            // Calculate how the dimensions will change
+            const scaleFactor = scale / oldScale;
+            const newWidth = prevWidth * scaleFactor;
+            const newHeight = prevHeight * scaleFactor;
+            
+            // Adjust position to zoom toward mouse pointer
+            imageX -= (newWidth - prevWidth) * mouseXRatio;
+            imageY -= (newHeight - prevHeight) * mouseYRatio;
+            
+            // Apply the new transform
+            applyTransform();
           }
         }, { passive: false });
       }
