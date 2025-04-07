@@ -13,11 +13,13 @@ contextBridge.exposeInMainWorld('transparentWindow', {
       offsetX: Number(offsetX), 
       offsetY: Number(offsetY) 
     }),
-  // Add resize method to handle image scaling
-  resizeWindow: (width, height) => 
+  // Enhanced resize method that accepts relative positions for smooth zooming
+  resizeWindow: (width, height, relativeX, relativeY) => 
     ipcRenderer.send('window:resize', {
       width: Number(width),
-      height: Number(height)
+      height: Number(height),
+      relativeX: relativeX !== undefined ? Number(relativeX) : 0.5,
+      relativeY: relativeY !== undefined ? Number(relativeY) : 0.5
     }),
   close: () => ipcRenderer.send('window:close')
 });
