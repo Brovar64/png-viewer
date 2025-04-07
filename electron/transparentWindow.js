@@ -72,13 +72,24 @@ function setupTransparentWindowHandlers() {
     }
   });
 
-  // Handle window dragging
-  ipcMain.on('window:startDrag', (event) => {
+  // Handle window dragging using manual positioning
+  ipcMain.on('window:dragStart', (event) => {
     const webContents = event.sender;
     const win = BrowserWindow.fromWebContents(webContents);
-    if (win) {
-      win.startWindowDrag();
-    }
+    if (!win) return;
+    
+    // Just acknowledge that dragging has started
+    event.returnValue = true;
+  });
+  
+  ipcMain.on('window:drag', (event, { mouseX, mouseY, offsetX, offsetY }) => {
+    const webContents = event.sender;
+    const win = BrowserWindow.fromWebContents(webContents);
+    if (!win) return;
+    
+    // Calculate new position
+    const [x, y] = win.getPosition();
+    win.setPosition(mouseX - offsetX, mouseY - offsetY);
   });
 
   // Handle window close
