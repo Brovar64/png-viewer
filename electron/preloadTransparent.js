@@ -13,5 +13,11 @@ contextBridge.exposeInMainWorld('transparentWindow', {
       offsetX: Number(offsetX), 
       offsetY: Number(offsetY) 
     }),
+  // Add resize method to handle image scaling
+  resizeWindow: (width, height) => 
+    ipcRenderer.send('window:resize', {
+      width: Number(width),
+      height: Number(height)
+    }),
   close: () => ipcRenderer.send('window:close')
 });
