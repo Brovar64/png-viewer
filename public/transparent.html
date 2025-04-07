@@ -10,8 +10,20 @@
         margin: 0;
         padding: 0;
         height: 100%;
+        width: 100%;
         overflow: hidden;
-        background: transparent;
+        background-color: transparent !important;
+        background: transparent !important;
+      }
+      
+      /* Ensure all container elements are transparent */
+      div, img, canvas {
+        background-color: transparent !important;
+      }
+      
+      .react-transform-wrapper,
+      .react-transform-component {
+        background-color: transparent !important;
       }
     </style>
   </head>
@@ -47,6 +59,10 @@
           document.body.appendChild(script);
         });
       }
+      
+      // Force background to be transparent
+      document.documentElement.style.background = 'transparent';
+      document.body.style.background = 'transparent';
       
       // Start loading the app
       loadApp();
