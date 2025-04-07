@@ -32,11 +32,9 @@ function createWindow() {
   console.log(`Loading main window URL: ${loadUrl}`);
   mainWindow.loadURL(loadUrl);
 
-  if (isDev) {
-    // Open DevTools in development mode
-    mainWindow.webContents.openDevTools();
-    console.log('DevTools opened for main window');
-  }
+  // Always open DevTools to help with debugging
+  mainWindow.webContents.openDevTools();
+  console.log('DevTools opened for main window');
 
   mainWindow.on('closed', () => {
     console.log('Main window closed');
@@ -49,6 +47,12 @@ function createWindow() {
  */
 function setupIPCHandlers() {
   console.log('Setting up main process IPC handlers');
+
+  // Make sure we don't set up handlers twice
+  if (ipcMain.eventNames().includes('window:openTransparent')) {
+    console.log('Handlers already set up, skipping');
+    return;
+  }
 
   // Directory selection dialog
   ipcMain.handle('dialog:openDirectory', async (event) => {
@@ -155,3 +159,6 @@ app.on('activate', () => {
 process.on('uncaughtException', (error) => {
   console.error('Uncaught exception:', error);
 });
+
+// Explicitly export functions for testing
+module.exports = { setupIPCHandlers };
