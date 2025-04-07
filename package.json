@@ -5,7 +5,7 @@
   "main": "electron/main.js",
   "scripts": {
     "start": "concurrently \"npm run start:react\" \"npm run start:electron\"",
-    "start:react": "react-scripts start",
+    "start:react": "BROWSER=none react-scripts start",
     "start:electron": "wait-on http://localhost:3000 && electron .",
     "build": "react-scripts build",
     "build:electron": "electron-builder",
