@@ -5,7 +5,6 @@ contextBridge.exposeInMainWorld('transparentWindow', {
     ipcRenderer.on('load-image', (_, data) => callback(data));
   },
   startDrag: () => ipcRenderer.sendSync('window:dragStart'),
-  // Fix the drag method to ensure all parameters are converted to numbers
   drag: (mouseX, mouseY, offsetX, offsetY) => 
     ipcRenderer.send('window:drag', { 
       mouseX: Number(mouseX), 
@@ -13,13 +12,11 @@ contextBridge.exposeInMainWorld('transparentWindow', {
       offsetX: Number(offsetX), 
       offsetY: Number(offsetY) 
     }),
-  // Enhanced resize method that accepts relative positions for smooth zooming
-  resizeWindow: (width, height, relativeX, relativeY) => 
+  // Simple resize method - only used for initial window sizing
+  resizeWindow: (width, height) => 
     ipcRenderer.send('window:resize', {
       width: Number(width),
-      height: Number(height),
-      relativeX: relativeX !== undefined ? Number(relativeX) : 0.5,
-      relativeY: relativeY !== undefined ? Number(relativeY) : 0.5
+      height: Number(height)
     }),
   close: () => ipcRenderer.send('window:close')
 });
