@@ -18,18 +18,38 @@
   <body>
     <div id="root"></div>
     <script>
-      // Receive image data from the main process
-      window.transparentWindow.loadImage(({ imageData }) => {
-        // Store image data in local storage for React to access
-        localStorage.setItem('currentImageData', imageData);
-        
-        // Load React app
-        const script = document.createElement('script');
-        script.src = window.location.href.includes('localhost:3000') 
-          ? '/transparent-app.js' 
-          : './transparent-app.js';
-        document.body.appendChild(script);
-      });
+      // Debug logging
+      console.log('Starting transparent window...');
+      
+      // Get the correct path based on environment
+      const isDev = window.location.href.includes('localhost:3000');
+      
+      function loadApp() {
+        // Receive image data from the main process
+        window.transparentWindow.loadImage(({ imageData }) => {
+          console.log('Received image data:', imageData ? imageData.substring(0, 50) + '...' : 'none');
+          
+          // Store image data in localStorage for the React app to access
+          localStorage.setItem('currentImageData', imageData);
+          
+          // Load React app
+          console.log('Loading React app...');
+          
+          // In development, we use a special loader in public/transparent-app.js
+          // In production, we need to load the built bundle
+          const scriptPath = isDev 
+            ? './transparent-app.js' 
+            : './static/js/transparent-app.js';
+          
+          const script = document.createElement('script');
+          script.src = scriptPath;
+          script.onerror = (err) => console.error('Failed to load script:', err);
+          document.body.appendChild(script);
+        });
+      }
+      
+      // Start loading the app
+      loadApp();
     </script>
   </body>
 </html>
