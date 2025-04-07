@@ -3,18 +3,25 @@ const path = require('path');
 const isDev = require('electron-is-dev');
 const fs = require('fs');
 
+// Map to store transparent windows by image path
 let transparentWindows = new Map();
 
 // Store image data temporarily
 const imageDataCache = new Map();
 
+/**
+ * Creates a new transparent window for viewing a PNG image
+ * @param {string} imagePath - Path to the image file 
+ * @param {string} imageId - Unique ID for cached image data
+ * @returns {BrowserWindow} The created transparent window
+ */
 function createTransparentWindow(imagePath, imageId) {
   console.log(`Creating transparent window for: ${imagePath} with ID: ${imageId}`);
   
+  // Get screen dimensions for window positioning
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
   
   // Create a new BrowserWindow with transparent background and no frame
-  // Using larger default size for better viewing experience
   const transparentWindow = new BrowserWindow({
     width: Math.min(800, width * 0.8),
     height: Math.min(800, height * 0.8),
@@ -77,10 +84,18 @@ function createTransparentWindow(imagePath, imageId) {
   return transparentWindow;
 }
 
+/**
+ * Setup all IPC handlers for transparent window functionality
+ */
 function setupTransparentWindowHandlers() {
   console.log('Setting up transparent window handlers');
+
+  if (!ipcMain) {
+    console.error('ipcMain is not available!');
+    return;
+  }
   
-  // Handle opening a transparent window
+  // Handle opening a transparent window with provided base64 image data
   ipcMain.handle('window:openTransparent', async (_, imagePath, imageData) => {
     console.log(`Received request to open transparent window for: ${imagePath}`);
     
@@ -188,8 +203,10 @@ function setupTransparentWindowHandlers() {
   });
   
   console.log('Transparent window handlers setup complete');
+  console.log('Registered handlers for window:openTransparent and window:openTransparentFile');
 }
 
+// Export the functions
 module.exports = {
   setupTransparentWindowHandlers
 };
