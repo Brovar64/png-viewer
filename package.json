@@ -5,9 +5,9 @@
   "main": "electron/main.js",
   "scripts": {
     "start": "concurrently \"npm run start:react\" \"npm run start:electron\"",
-    "start:react": "set BROWSER=none&&react-scripts start",
+    "start:react": "set BROWSER=none&&react-app-rewired start",
     "start:electron": "wait-on http://localhost:3000 && electron .",
-    "build": "react-scripts build",
+    "build": "react-app-rewired build",
     "build:electron": "electron-builder",
     "package": "npm run build && npm run build:electron"
   },
@@ -23,6 +23,7 @@
     "concurrently": "^8.2.1",
     "electron": "^27.0.0",
     "electron-builder": "^24.6.4",
+    "react-app-rewired": "^2.2.1",
     "wait-on": "^7.0.1"
   },
   "browserslist": {
