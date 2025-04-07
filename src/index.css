@@ -12,6 +12,21 @@ body {
   background-color: #f9fafb;
 }
 
+/* Add transparent background utility that works with Electron */
+.bg-transparent {
+  background-color: transparent !important;
+  background: transparent !important;
+}
+
+/* For transparent windows, ensure proper transparency for all elements */
+.transparent-window {
+  background-color: transparent !important;
+}
+
+.transparent-window * {
+  background-color: transparent !important;
+}
+
 code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
