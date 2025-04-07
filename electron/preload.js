@@ -5,5 +5,7 @@ contextBridge.exposeInMainWorld('electron', {
   readDirectory: (path) => ipcRenderer.invoke('fs:readDirectory', path),
   readFile: (path) => ipcRenderer.invoke('fs:readFile', path),
   openTransparentWindow: (imagePath, imageData) => 
-    ipcRenderer.invoke('window:openTransparent', imagePath, imageData)
+    ipcRenderer.invoke('window:openTransparent', imagePath, imageData),
+  openTransparentFile: (imagePath) =>
+    ipcRenderer.invoke('window:openTransparentFile', imagePath)
 });
