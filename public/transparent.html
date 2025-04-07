@@ -24,6 +24,7 @@
         height: 100%;
         width: 100%;
         overflow: visible;
+        box-sizing: border-box;
       }
 
       #png-image {
@@ -69,10 +70,6 @@
       .crop-handle-e { top: 50%; right: -6px; margin-top: -6px; cursor: e-resize; }
       .crop-handle-s { bottom: -6px; left: 50%; margin-left: -6px; cursor: s-resize; }
       .crop-handle-w { top: 50%; left: -6px; margin-top: -6px; cursor: w-resize; }
-      
-      .crop-active #png-image {
-        clip-path: var(--crop-clip-path);
-      }
     </style>
   </head>
   <body>
@@ -203,28 +200,68 @@
         } else {
           // Exit crop mode
           cropOverlay.style.display = 'none';
-          document.body.classList.remove('crop-active');
-          
-          // Clear the clip path
-          imageEl.style.clipPath = 'none';
         }
       }
       
-      // Apply the crop to the image
+      // Physically crop the window to the selected area
       function applyCrop() {
         if (!cropMode) return;
         
+        // Get crop dimensions
+        const left = Math.min(cropStartX, cropEndX);
+        const top = Math.min(cropStartY, cropEndY);
+        const width = Math.abs(cropEndX - cropStartX);
+        const height = Math.abs(cropEndY - cropStartY);
+        
+        if (width < 50 || height < 50) {
+          console.error('Crop area too small');
+          return;
+        }
+        
         const imageRect = imageEl.getBoundingClientRect();
         
-        // Calculate crop percentages
-        const left = Math.max(0, (cropStartX - imageRect.left) / imageRect.width * 100);
-        const top = Math.max(0, (cropStartY - imageRect.top) / imageRect.height * 100);
-        const right = Math.min(100, 100 - (cropEndX - imageRect.left) / imageRect.width * 100);
-        const bottom = Math.min(100, 100 - (cropEndY - imageRect.top) / imageRect.height * 100);
+        // Calculate the scale factor between the window and the displayed image
+        const scaleFactorX = originalWidth / (imageRect.width / scale);
+        const scaleFactorY = originalHeight / (imageRect.height / scale);
         
-        // Update clip path CSS variable
-        document.body.style.setProperty('--crop-clip-path', `inset(${top}% ${right}% ${bottom}% ${left}%)`);
-        document.body.classList.add('crop-active');
+        // Convert crop area coordinates to image coordinates
+        const cropImageX = (left - imageRect.left) * scaleFactorX / scale;
+        const cropImageY = (top - imageRect.top) * scaleFactorY / scale;
+        const cropImageWidth = width * scaleFactorX / scale;
+        const cropImageHeight = height * scaleFactorY / scale;
+        
+        // Create a new canvas for the cropped image
+        const cropCanvas = document.createElement('canvas');
+        cropCanvas.width = cropImageWidth;
+        cropCanvas.height = cropImageHeight;
+        const cropCtx = cropCanvas.getContext('2d');
+        
+        // Draw only the cropped portion
+        cropCtx.drawImage(
+          hitTestCanvas, 
+          cropImageX, 
+          cropImageY, 
+          cropImageWidth, 
+          cropImageHeight,
+          0, 
+          0, 
+          cropImageWidth, 
+          cropImageHeight
+        );
+        
+        // Convert to base64
+        const croppedImageData = cropCanvas.toDataURL('image/png');
+        
+        // Update the window to show only the cropped part
+        try {
+          window.transparentWindow.updateCroppedImage(croppedImageData, width, height);
+          
+          // Reset crop mode
+          cropMode = false;
+          cropOverlay.style.display = 'none';
+        } catch (error) {
+          console.error('Error applying crop:', error);
+        }
       }
 
       // Update the crop overlay position and dimensions
@@ -421,7 +458,11 @@
             // Finish crop
             isCropping = false;
             activeCropHandle = null;
-            applyCrop();
+            
+            // Only create a valid crop area if big enough
+            if (Math.abs(cropEndX - cropStartX) > 10 && Math.abs(cropEndY - cropStartY) > 10) {
+              updateCropOverlay();
+            }
           }
           
           isDragging = false;
@@ -454,16 +495,12 @@
           // Apply crop with Enter key
           if (e.key === 'Enter' && cropMode) {
             applyCrop();
-            cropMode = false;
-            cropOverlay.style.display = 'none';
           }
           
           // Cancel crop with Escape key
           if (e.key === 'Escape' && cropMode) {
             cropMode = false;
             cropOverlay.style.display = 'none';
-            document.body.classList.remove('crop-active');
-            imageEl.style.clipPath = 'none';
           }
         });
 
