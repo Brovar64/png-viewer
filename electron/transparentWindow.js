@@ -32,7 +32,8 @@ function createTransparentWindow(imagePath, imageId) {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: path.join(__dirname, 'preloadTransparent.js')
+      preload: path.join(__dirname, 'preloadTransparent.js'),
+      devTools: true // Always enable DevTools
     }
   });
 
@@ -51,6 +52,10 @@ function createTransparentWindow(imagePath, imageId) {
   // Load the transparent window HTML
   transparentWindow.loadURL(htmlPath);
 
+  // Open DevTools for the transparent window
+  transparentWindow.webContents.openDevTools({ mode: 'detach' });
+  console.log('DevTools opened for transparent window');
+
   // Store the window reference
   transparentWindows.set(imagePath, transparentWindow);
   
@@ -65,7 +70,7 @@ function createTransparentWindow(imagePath, imageId) {
       return;
     }
     
-    console.log(`Sending image data to transparent window: ${imagePath}`);
+    console.log(`Sending image data to transparent window: ${imagePath} (data length: ${imageData.length})`);
     transparentWindow.webContents.send('load-image', {
       imageData,
       imagePath
@@ -73,6 +78,11 @@ function createTransparentWindow(imagePath, imageId) {
     
     // Remove from cache after sending
     imageDataCache.delete(imageId);
+  });
+  
+  // Debug any navigation errors
+  transparentWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+    console.error(`Failed to load transparent window: ${errorDescription} (${errorCode})`);
   });
 
   // Remove window reference when closed
@@ -97,7 +107,7 @@ function setupTransparentWindowHandlers() {
   
   // Handle opening a transparent window with provided base64 image data
   ipcMain.handle('window:openTransparent', async (_, imagePath, imageData) => {
-    console.log(`Received request to open transparent window for: ${imagePath}`);
+    console.log(`Handler window:openTransparent called for: ${imagePath}`);
     
     // If window for this image already exists, focus it instead of creating a new one
     if (transparentWindows.has(imagePath)) {
@@ -125,7 +135,7 @@ function setupTransparentWindowHandlers() {
 
   // Alternative approach - read file directly in main process instead of passing base64 data
   ipcMain.handle('window:openTransparentFile', async (_, imagePath) => {
-    console.log(`Received request to open transparent window for file: ${imagePath}`);
+    console.log(`Handler window:openTransparentFile called for: ${imagePath}`);
     
     // If window for this image already exists, focus it instead of creating a new one
     if (transparentWindows.has(imagePath)) {
@@ -143,7 +153,7 @@ function setupTransparentWindowHandlers() {
       
       // Store the image data in cache
       imageDataCache.set(imageId, base64Data);
-      console.log(`Stored file data in cache with ID: ${imageId}`);
+      console.log(`Stored file data in cache with ID: ${imageId}, data length: ${base64Data.length}`);
       
       // Create window
       createTransparentWindow(imagePath, imageId);
@@ -206,7 +216,25 @@ function setupTransparentWindowHandlers() {
   console.log('Registered handlers for window:openTransparent and window:openTransparentFile');
 }
 
+// Function to test creating a window directly (for debugging)
+function testCreateWindow(imagePath) {
+  console.log(`Test creating window for: ${imagePath}`);
+  try {
+    const imageId = Date.now().toString();
+    // Create a dummy base64 string
+    const dummyData = `data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z/C/HgAGgwJ/lK3Q6wAAAABJRU5ErkJggg==`;
+    
+    imageDataCache.set(imageId, dummyData);
+    createTransparentWindow(imagePath, imageId);
+    return { success: true };
+  } catch (error) {
+    console.error('Error in test window creation:', error);
+    return { success: false, error: error.message };
+  }
+}
+
 // Export the functions
 module.exports = {
-  setupTransparentWindowHandlers
+  setupTransparentWindowHandlers,
+  testCreateWindow
 };
