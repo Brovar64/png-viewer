@@ -12,10 +12,10 @@ function createTransparentWindow(imagePath, imageId) {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
   
   // Create a new BrowserWindow with transparent background and no frame
-  // Using larger default size for better zooming experience
+  // Using larger default size for better viewing experience
   const transparentWindow = new BrowserWindow({
-    width: 600,
-    height: 600,
+    width: Math.min(800, width * 0.8),
+    height: Math.min(800, height * 0.8),
     transparent: true,
     frame: false,
     resizable: false,
@@ -29,8 +29,8 @@ function createTransparentWindow(imagePath, imageId) {
 
   // Position the window in the center of the screen
   transparentWindow.setPosition(
-    Math.floor(width / 2 - 300),
-    Math.floor(height / 2 - 300)
+    Math.floor(width / 2 - transparentWindow.getBounds().width / 2),
+    Math.floor(height / 2 - transparentWindow.getBounds().height / 2)
   );
 
   // Load the transparent window HTML
