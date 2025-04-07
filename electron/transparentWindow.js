@@ -18,7 +18,7 @@ function createTransparentWindow(imagePath, imageId) {
     height: 600,
     transparent: true,
     frame: false,
-    resizable: false,
+    resizable: true, // Enable resizing to support dynamic content
     skipTaskbar: true,
     webPreferences: {
       nodeIntegration: false,
@@ -154,6 +154,51 @@ function setupTransparentWindowHandlers() {
       win.setPosition(Math.round(mouseX - offsetX), Math.round(mouseY - offsetY));
     } catch (error) {
       console.error('Error in window:drag handler:', error);
+    }
+  });
+
+  // Handle window resize based on zoomed image dimensions
+  ipcMain.on('window:resize', (event, args) => {
+    try {
+      if (!args || typeof args !== 'object') {
+        console.error('Invalid argument format in window:resize');
+        return;
+      }
+      
+      const width = Number(args.width);
+      const height = Number(args.height);
+      
+      // Validate that values are numbers and have reasonable size
+      if (isNaN(width) || isNaN(height) || width <= 0 || height <= 0) {
+        console.error('Invalid dimensions in window:resize', args);
+        return;
+      }
+      
+      const webContents = event.sender;
+      const win = BrowserWindow.fromWebContents(webContents);
+      if (!win) return;
+      
+      // Get current position
+      const [currentX, currentY] = win.getPosition();
+      const [currentWidth, currentHeight] = win.getSize();
+      
+      // Calculate new position to keep the window centered
+      const newX = Math.round(currentX - ((width - currentWidth) / 2));
+      const newY = Math.round(currentY - ((height - currentHeight) / 2));
+      
+      // Add padding around the image
+      const paddedWidth = Math.min(width + 40, screen.getPrimaryDisplay().workAreaSize.width);
+      const paddedHeight = Math.min(height + 40, screen.getPrimaryDisplay().workAreaSize.height);
+      
+      // Resize and reposition window to maintain center point
+      win.setBounds({
+        x: newX,
+        y: newY,
+        width: paddedWidth,
+        height: paddedHeight
+      });
+    } catch (error) {
+      console.error('Error in window:resize handler:', error);
     }
   });
 
