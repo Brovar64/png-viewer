@@ -1,0 +1,51 @@
+# PNG Viewer
+
+An Electron + React application for browsing PNG files in a selected folder.
+
+## Features
+
+- Select a folder to browse PNG files
+- Display thumbnails of PNG images
+- Show image file name and size
+- Simple and intuitive user interface
+
+## Installation
+
+```bash
+# Clone this repository
+git clone https://github.com/Brovar64/png-viewer.git
+
+# Navigate to the project directory
+cd png-viewer
+
+# Install dependencies
+npm install
+```
+
+## Usage
+
+```bash
+# Start the application in development mode
+npm start
+```
+
+The application will launch and you can click the "Select PNG Folder" button to browse your directories and view PNG files.
+
+## Building for Production
+
+```bash
+# Build the application for your platform
+npm run package
+```
+
+The packaged application will be available in the `dist` directory.
+
+## Tech Stack
+
+- Electron: Desktop application framework
+- React: UI library
+- TailwindCSS: Utility-first CSS framework
+
+## License
+
+[MIT](LICENSE)
