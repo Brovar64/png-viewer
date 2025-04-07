@@ -9,6 +9,19 @@ function TransparentImageViewer({ imageData }) {
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   
+  // Force transparent background on mount
+  useEffect(() => {
+    document.body.classList.add('transparent-window');
+    
+    // Apply inline styles too as a backup
+    document.documentElement.style.backgroundColor = 'transparent';
+    document.body.style.backgroundColor = 'transparent';
+    
+    return () => {
+      document.body.classList.remove('transparent-window');
+    };
+  }, []);
+  
   // Log data for debugging
   useEffect(() => {
     console.log('TransparentImageViewer rendered with imageData:', 
@@ -162,11 +175,11 @@ function TransparentImageViewer({ imageData }) {
 
   return (
     <div 
-      className="h-screen w-screen overflow-hidden select-none"
+      className="h-screen w-screen overflow-hidden select-none bg-transparent"
       onMouseMove={handleMouseMove}
       style={{ 
         cursor: isOverImage ? 'move' : 'default',
-        background: 'transparent' 
+        backgroundColor: 'transparent' 
       }}
     >
       <TransformWrapper
@@ -181,13 +194,15 @@ function TransparentImageViewer({ imageData }) {
         {({ zoomIn, zoomOut, resetTransform }) => (
           <>
             <TransformComponent
+              wrapperClassName="bg-transparent"
+              contentClassName="bg-transparent"
               wrapperStyle={{ 
                 width: '100%', 
                 height: '100%', 
-                background: 'transparent'
+                backgroundColor: 'transparent' 
               }}
               contentStyle={{ 
-                background: 'transparent'
+                backgroundColor: 'transparent'
               }}
             >
               <img
@@ -196,17 +211,18 @@ function TransparentImageViewer({ imageData }) {
                 alt="Transparent PNG"
                 onLoad={setupCanvas}
                 onMouseDown={handleMouseDown}
+                className="bg-transparent"
                 style={{ 
                   userSelect: 'none', 
                   WebkitUserDrag: 'none',
-                  background: 'transparent'
+                  backgroundColor: 'transparent'
                 }}
               />
             </TransformComponent>
 
             {/* Add debug button in dev mode */}
             {process.env.NODE_ENV === 'development' && (
-              <div className="absolute bottom-4 right-4 flex gap-2">
+              <div className="absolute bottom-4 right-4 flex gap-2 z-10">
                 <button onClick={() => zoomIn()} className="bg-blue-500 text-white p-2 rounded opacity-50 hover:opacity-100">+</button>
                 <button onClick={() => zoomOut()} className="bg-blue-500 text-white p-2 rounded opacity-50 hover:opacity-100">-</button>
                 <button onClick={() => resetTransform()} className="bg-blue-500 text-white p-2 rounded opacity-50 hover:opacity-100">Reset</button>
