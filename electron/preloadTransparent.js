@@ -15,5 +15,7 @@ contextBridge.exposeInMainWorld('transparentWindow', {
     }),
   close: () => ipcRenderer.send('window:close'),
   resizeWindow: (width, height) => 
-    ipcRenderer.send('window:resize', Number(width), Number(height))
+    ipcRenderer.send('window:resize', Number(width), Number(height)),
+  updateCroppedImage: (imageData, width, height) =>
+    ipcRenderer.invoke('window:updateCroppedImage', imageData, Number(width), Number(height))
 });
