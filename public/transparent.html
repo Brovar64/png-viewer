@@ -23,7 +23,7 @@
         display: block;
         height: 100%;
         width: 100%;
-        overflow: hidden;
+        overflow: visible;
       }
 
       #png-image {
@@ -56,7 +56,6 @@
       
       // For dragging
       let isDragging = false;
-      let dragStarted = false;
       let dragStartX = 0;
       let dragStartY = 0;
       let dragOffsetX = 0;
@@ -92,9 +91,22 @@
         };
       });
 
-      // Apply the current scale to the image
+      // Apply the current scale to the image and resize window if needed
       function applyScale() {
         imageEl.style.transform = `scale(${scale})`;
+        
+        // Calculate new dimensions based on scale and notify main process to resize window
+        const scaledWidth = Math.ceil(imageEl.naturalWidth * scale);
+        const scaledHeight = Math.ceil(imageEl.naturalHeight * scale);
+        
+        // Only request resize if dimensions have changed significantly (by at least 20px)
+        const rect = imageEl.getBoundingClientRect();
+        const currentWidth = rect.width;
+        const currentHeight = rect.height;
+        
+        if (Math.abs(scaledWidth - currentWidth) > 20 || Math.abs(scaledHeight - currentHeight) > 20) {
+          window.transparentWindow.resizeWindow(scaledWidth, scaledHeight);
+        }
       }
 
       // Check if a pixel at the given coordinates is transparent
@@ -216,6 +228,8 @@
             e.preventDefault();
             
             // Calculate new scale based on wheel direction
+            const oldScale = scale;
+            
             if (e.deltaY < 0) {
               // Scroll up - zoom in
               scale = Math.min(scale + scaleStep, maxScale);
@@ -224,8 +238,10 @@
               scale = Math.max(scale - scaleStep, minScale);
             }
             
-            // Apply the new scale
-            applyScale();
+            // Only apply scale and resize window if scale actually changed
+            if (oldScale !== scale) {
+              applyScale();
+            }
           }
         }, { passive: false });
       }
