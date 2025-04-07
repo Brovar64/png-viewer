@@ -1,8 +1,8 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const isDev = require('electron-is-dev');
-const { setupTransparentWindowHandlers } = require('./transparentWindow');
+const { setupTransparentWindowHandlers, testCreateWindow } = require('./transparentWindow');
 
 // Disable GPU acceleration to prevent GPU process errors
 app.disableHardwareAcceleration();
@@ -36,10 +36,65 @@ function createWindow() {
   mainWindow.webContents.openDevTools();
   console.log('DevTools opened for main window');
 
+  // Create application menu with debug options
+  createMenu();
+
   mainWindow.on('closed', () => {
     console.log('Main window closed');
     mainWindow = null;
   });
+}
+
+/**
+ * Create application menu with additional debug options
+ */
+function createMenu() {
+  const template = [
+    {
+      label: 'File',
+      submenu: [
+        {
+          label: 'Exit',
+          click: () => app.quit()
+        }
+      ]
+    },
+    {
+      label: 'Debug',
+      submenu: [
+        {
+          label: 'Test Transparent Window',
+          click: () => {
+            console.log('Menu: Test Transparent Window clicked');
+            testCreateWindow('test.png');
+          }
+        },
+        {
+          label: 'List IPC Handlers',
+          click: () => {
+            console.log('Registered IPC handlers:', ipcMain.eventNames());
+          }
+        },
+        {
+          type: 'separator'
+        },
+        {
+          label: 'Toggle DevTools',
+          accelerator: 'F12',
+          click: () => {
+            const focusedWindow = BrowserWindow.getFocusedWindow();
+            if (focusedWindow) {
+              focusedWindow.webContents.toggleDevTools();
+            }
+          }
+        }
+      ]
+    }
+  ];
+
+  const menu = Menu.buildFromTemplate(template);
+  Menu.setApplicationMenu(menu);
+  console.log('Application menu created with debug options');
 }
 
 /**
@@ -139,6 +194,12 @@ app.whenReady().then(() => {
   
   // Check handlers after everything is initialized
   console.log('IPC handlers after initialization:', ipcMain.eventNames());
+
+  // Add a direct handler for debugging
+  global.testTransparentWindow = () => {
+    console.log('Direct test transparent window call');
+    testCreateWindow('test-direct.png');
+  };
 });
 
 app.on('window-all-closed', () => {
