@@ -28,8 +28,6 @@
 
       #png-image {
         position: absolute;
-        max-width: 100%;
-        max-height: 100%;
         display: none;
         margin: auto;
         top: 0;
@@ -37,6 +35,7 @@
         right: 0;
         bottom: 0;
         -webkit-user-drag: none;
+        transform-origin: center center;
       }
     </style>
   </head>
@@ -64,6 +63,12 @@
       let dragOffsetY = 0;
       let initialClickOnNonTransparent = false;
 
+      // For zooming
+      let scale = 1;
+      const minScale = 0.1;
+      const maxScale = 10;
+      const scaleStep = 0.1;
+
       // Listen for image data from the main process
       window.transparentWindow.loadImage(({ imageData, imagePath: path }) => {
         imagePath = path;
@@ -79,10 +84,18 @@
           // Draw the image onto the canvas for pixel data access
           ctx.drawImage(imageEl, 0, 0);
 
+          // Apply initial scale
+          applyScale();
+
           // Initialize tracking
           initializeInteractions();
         };
       });
+
+      // Apply the current scale to the image
+      function applyScale() {
+        imageEl.style.transform = `scale(${scale})`;
+      }
 
       // Check if a pixel at the given coordinates is transparent
       function isPixelTransparent(x, y) {
@@ -180,6 +193,26 @@
             window.transparentWindow.close();
           }
         });
+
+        // Add mouse wheel event for zooming
+        document.addEventListener('wheel', (e) => {
+          if (isOverNonTransparentPixel) {
+            // Prevent default scrolling behavior
+            e.preventDefault();
+            
+            // Calculate new scale based on wheel direction
+            if (e.deltaY < 0) {
+              // Scroll up - zoom in
+              scale = Math.min(scale + scaleStep, maxScale);
+            } else {
+              // Scroll down - zoom out
+              scale = Math.max(scale - scaleStep, minScale);
+            }
+            
+            // Apply the new scale
+            applyScale();
+          }
+        }, { passive: false });
       }
     </script>
   </body>
