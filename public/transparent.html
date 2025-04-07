@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <title>PNG Viewer - Transparent Window</title>
+    <style>
+      html, body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        overflow: hidden;
+        background: transparent;
+      }
+
+      body {
+        -webkit-app-region: no-drag;
+        user-select: none;
+      }
+
+      #image-container {
+        position: absolute;
+        display: block;
+        height: 100%;
+        width: 100%;
+        overflow: hidden;
+      }
+
+      #png-image {
+        position: absolute;
+        max-width: 100%;
+        max-height: 100%;
+        display: none;
+        margin: auto;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        -webkit-user-drag: none;
+      }
+
+      .draggable {
+        -webkit-app-region: drag;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="image-container">
+      <img id="png-image" alt="PNG Image" />
+    </div>
+    <canvas id="hit-test-canvas" style="display: none;"></canvas>
+
+    <script>
+      // Get elements
+      const imageEl = document.getElementById('png-image');
+      const hitTestCanvas = document.getElementById('hit-test-canvas');
+      const ctx = hitTestCanvas.getContext('2d');
+      
+      let isOverNonTransparentPixel = false;
+      let imagePath = '';
+
+      // Listen for image data from the main process
+      window.transparentWindow.loadImage(({ imageData, imagePath: path }) => {
+        imagePath = path;
+        imageEl.src = imageData;
+        imageEl.style.display = 'block';
+        
+        // Once image is loaded, prepare hit-testing canvas
+        imageEl.onload = () => {
+          // Size canvas to match image
+          hitTestCanvas.width = imageEl.naturalWidth;
+          hitTestCanvas.height = imageEl.naturalHeight;
+          
+          // Draw the image onto the canvas for pixel data access
+          ctx.drawImage(imageEl, 0, 0);
+
+          // Initialize tracking
+          updateHitTests();
+        };
+      });
+
+      // Handle mouse move for pixel transparency detection
+      function updateHitTests() {
+        document.addEventListener('mousemove', (e) => {
+          // Get mouse position relative to the image
+          const rect = imageEl.getBoundingClientRect();
+          if (
+            e.clientX < rect.left ||
+            e.clientX > rect.right ||
+            e.clientY < rect.top ||
+            e.clientY > rect.bottom
+          ) {
+            // Mouse is outside image bounds
+            isOverNonTransparentPixel = false;
+            document.body.style.cursor = 'default';
+            imageEl.classList.remove('draggable');
+            return;
+          }
+
+          // Calculate position in the original image coordinates
+          const x = Math.floor(((e.clientX - rect.left) / rect.width) * hitTestCanvas.width);
+          const y = Math.floor(((e.clientY - rect.top) / rect.height) * hitTestCanvas.height);
+
+          // Get pixel data (RGBA)
+          const pixelData = ctx.getImageData(x, y, 1, 1).data;
+          
+          // Check alpha channel (index 3) for transparency
+          isOverNonTransparentPixel = pixelData[3] > 0;
+          
+          // Update cursor and draggable state based on transparency
+          if (isOverNonTransparentPixel) {
+            document.body.style.cursor = 'move';
+            imageEl.classList.add('draggable');
+          } else {
+            document.body.style.cursor = 'default';
+            imageEl.classList.remove('draggable');
+          }
+        });
+      }
+
+      // Listen for key press to close window (only when over non-transparent pixels)
+      document.addEventListener('keydown', (e) => {
+        if (e.key.toLowerCase() === 'w' && isOverNonTransparentPixel) {
+          window.transparentWindow.close();
+        }
+      });
+
+      // Window interactions
+      let isDragging = false;
+
+      // Start drag on mousedown if over non-transparent part
+      document.addEventListener('mousedown', (e) => {
+        // Only allow starting drag on non-transparent pixels
+        if (isOverNonTransparentPixel) {
+          isDragging = true;
+          window.transparentWindow.startDrag();
+        }
+      });
+
+      document.addEventListener('mouseup', () => {
+        isDragging = false;
+      });
+    </script>
+  </body>
+</html>
