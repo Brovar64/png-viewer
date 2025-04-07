@@ -3,6 +3,9 @@ const path = require('path');
 const fs = require('fs');
 const isDev = require('electron-is-dev');
 
+// Disable GPU acceleration to prevent GPU process errors
+app.disableHardwareAcceleration();
+
 let mainWindow;
 
 function createWindow() {
@@ -23,7 +26,8 @@ function createWindow() {
   );
 
   if (isDev) {
-    mainWindow.webContents.openDevTools();
+    // Uncomment this line if you need DevTools
+    // mainWindow.webContents.openDevTools();
   }
 
   mainWindow.on('closed', () => {
