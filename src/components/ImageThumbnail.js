@@ -11,11 +11,15 @@ function ImageThumbnail({ image, src }) {
 
   const handleClick = async () => {
     try {
+      console.log(`Clicked on image: ${image.name}, Size: ${image.size}, Path: ${image.path}`);
+      
       // For large images, use the more efficient method that reads the file directly in the main process
       if (image.size > 1024 * 1024) { // For files larger than 1MB
+        console.log(`Opening large file directly: ${image.path}`);
         await window.electron.openTransparentFile(image.path);
       } else if (src) {
         // For smaller images, we can still use the original method with base64 data
+        console.log(`Opening image with src data: ${image.path}`);
         await window.electron.openTransparentWindow(image.path, src);
       }
     } catch (error) {

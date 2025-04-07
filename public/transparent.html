@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#000000" />
     <title>PNG Viewer - Transparent Window</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-zoom-pan-pinch@3.3.0/dist/react-zoom-pan-pinch.js" crossorigin></script>
     <style>
       html, body {
         margin: 0;
@@ -26,6 +29,19 @@
         overflow: hidden;
       }
 
+      .react-transform-component {
+        width: 100% !important;
+        height: 100% !important;
+        overflow: visible !important;
+      }
+
+      .react-transform-element {
+        cursor: default;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+
       #png-image {
         position: absolute;
         display: none;
@@ -40,65 +56,132 @@
     </style>
   </head>
   <body>
-    <div id="image-container">
-      <img id="png-image" alt="PNG Image" />
-    </div>
+    <div id="root"></div>
     <canvas id="hit-test-canvas" style="display: none;"></canvas>
 
     <script>
-      // Get elements
-      const imageEl = document.getElementById('png-image');
+      console.log('Transparent window HTML loaded');
+      
+      // Get elements and setup
+      const root = document.getElementById('root');
       const hitTestCanvas = document.getElementById('hit-test-canvas');
       const ctx = hitTestCanvas.getContext('2d');
       
+      console.log('Canvas and context initialized');
+      
+      // State variables
       let isOverNonTransparentPixel = false;
       let imagePath = '';
-      
-      // For dragging
       let isDragging = false;
-      let dragStarted = false;
       let dragStartX = 0;
       let dragStartY = 0;
       let dragOffsetX = 0;
       let dragOffsetY = 0;
       let initialClickOnNonTransparent = false;
 
-      // For zooming
-      let scale = 1;
-      const minScale = 0.1;
-      const maxScale = 10;
-      const scaleStep = 0.1;
+      console.log('Variables initialized');
 
-      // Listen for image data from the main process
-      window.transparentWindow.loadImage(({ imageData, imagePath: path }) => {
-        imagePath = path;
-        imageEl.src = imageData;
-        imageEl.style.display = 'block';
+      // Create React components using the globally available React
+      const { useState, useEffect, useRef } = React;
+      
+      // Check if ReactZoomPanPinch is available
+      if (!window.ReactZoomPanPinch) {
+        console.error('ReactZoomPanPinch is not loaded!');
+      } else {
+        console.log('ReactZoomPanPinch is available');
+      }
+      
+      const { TransformWrapper, TransformComponent } = window.ReactZoomPanPinch || {};
+
+      const ImageViewer = ({ imageData }) => {
+        console.log('ImageViewer component rendering with data:', imageData ? imageData.substring(0, 50) + '...' : 'null');
         
-        // Once image is loaded, prepare hit-testing canvas
-        imageEl.onload = () => {
-          // Size canvas to match image
-          hitTestCanvas.width = imageEl.naturalWidth;
-          hitTestCanvas.height = imageEl.naturalHeight;
+        const imageRef = useRef(null);
+        const [isImageLoaded, setIsImageLoaded] = useState(false);
+        
+        const handleImageLoad = () => {
+          console.log('Image loaded in the viewer');
+          const img = imageRef.current;
+          if (!img) {
+            console.error('Image reference is null');
+            return;
+          }
           
-          // Draw the image onto the canvas for pixel data access
-          ctx.drawImage(imageEl, 0, 0);
-
-          // Apply initial scale
-          applyScale();
-
-          // Initialize tracking
-          initializeInteractions();
+          // Setup hit-test canvas for transparency detection
+          hitTestCanvas.width = img.naturalWidth;
+          hitTestCanvas.height = img.naturalHeight;
+          ctx.clearRect(0, 0, hitTestCanvas.width, hitTestCanvas.height);
+          ctx.drawImage(img, 0, 0);
+          
+          setIsImageLoaded(true);
+          img.style.display = 'block';
+          console.log('Hit-test canvas initialized with dimensions:', hitTestCanvas.width, 'x', hitTestCanvas.height);
         };
-      });
-
-      // Apply the current scale to the image
-      function applyScale() {
-        imageEl.style.transform = `scale(${scale})`;
+        
+        return React.createElement(
+          TransformWrapper,
+          {
+            initialScale: 1,
+            minScale: 0.1,
+            maxScale: 10,
+            limitToBounds: false,
+            doubleClick: { disabled: true },
+            wheel: { wheelDisabled: true } // We'll handle wheel events ourselves
+          },
+          ({ zoomIn, zoomOut }) => (
+            React.createElement(
+              TransformComponent,
+              {
+                wrapperStyle: { width: '100%', height: '100%' },
+                contentStyle: { display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }
+              },
+              React.createElement('img', {
+                ref: imageRef,
+                id: 'png-image',
+                src: imageData,
+                alt: 'PNG Image',
+                style: {
+                  WebkitUserDrag: 'none',
+                  userSelect: 'none',
+                  display: 'none' // Hidden initially until loaded
+                },
+                onLoad: handleImageLoad
+              })
+            )
+          )
+        );
+      };
+      
+      // Listen for image data from the main process
+      if (window.transparentWindow) {
+        console.log('Setting up transparentWindow.loadImage handler');
+        window.transparentWindow.loadImage(({ imageData, imagePath: path }) => {
+          console.log('Received image data in transparent window:', path);
+          imagePath = path;
+          
+          // Render our React component
+          console.log('Rendering React component');
+          ReactDOM.render(
+            React.createElement(ImageViewer, { imageData }),
+            root
+          );
+          
+          // Initialize mouse tracking and interactions
+          console.log('Initializing interactions');
+          initializeInteractions();
+        });
+      } else {
+        console.error('transparentWindow API is not available!');
       }
 
       // Check if a pixel at the given coordinates is transparent
       function isPixelTransparent(x, y) {
+        const imageEl = document.getElementById('png-image');
+        if (!imageEl) {
+          console.warn('png-image element not found');
+          return true;
+        }
+        
         const rect = imageEl.getBoundingClientRect();
         
         // Check if coordinates are outside image bounds
@@ -112,6 +195,7 @@
         }
 
         // Convert window coordinates to image coordinates
+        const scale = imageEl.naturalWidth / rect.width;
         const imgX = Math.floor(((x - rect.left) / rect.width) * hitTestCanvas.width);
         const imgY = Math.floor(((y - rect.top) / rect.height) * hitTestCanvas.height);
         
@@ -137,6 +221,8 @@
       }
 
       function initializeInteractions() {
+        console.log('Initializing interactions');
+        
         // Handle mouse move for pixel transparency detection and dragging
         document.addEventListener('mousemove', (e) => {
           // If dragging is in progress, always move the window regardless of current pixel
@@ -148,7 +234,11 @@
               const offsetX = Number(dragOffsetX);
               const offsetY = Number(dragOffsetY);
               
-              window.transparentWindow.drag(screenX, screenY, offsetX, offsetY);
+              if (window.transparentWindow) {
+                window.transparentWindow.drag(screenX, screenY, offsetX, offsetY);
+              } else {
+                console.error('transparentWindow.drag is not available');
+              }
             } catch (error) {
               console.error('Error during drag:', error);
               isDragging = false; // Stop dragging on error
@@ -165,6 +255,7 @@
 
         // Initialize window dragging
         document.addEventListener('mousedown', (e) => {
+          console.log('Mouse down at', e.clientX, e.clientY);
           initialClickOnNonTransparent = !isPixelTransparent(e.clientX, e.clientY);
           
           if (initialClickOnNonTransparent) {
@@ -172,13 +263,16 @@
             isDragging = true;
             
             // Calculate and store the click offset relative to the window
-            const rect = imageEl.getBoundingClientRect();
-            dragOffsetX = e.clientX - rect.left;
-            dragOffsetY = e.clientY - rect.top;
+            dragOffsetX = e.clientX;
+            dragOffsetY = e.clientY;
             
             // Tell the main process dragging has started
             try {
-              window.transparentWindow.startDrag();
+              if (window.transparentWindow) {
+                window.transparentWindow.startDrag();
+              } else {
+                console.error('transparentWindow.startDrag is not available');
+              }
             } catch (error) {
               console.error('Error starting drag:', error);
               isDragging = false;
@@ -192,20 +286,28 @@
 
         // Handle drag end
         window.addEventListener('mouseup', () => {
+          console.log('Mouse up - ending drag');
           isDragging = false;
           initialClickOnNonTransparent = false;
         });
 
         // Also handle mouseup outside the window
         window.addEventListener('blur', () => {
+          console.log('Window blur - ending drag');
           isDragging = false;
           initialClickOnNonTransparent = false;
         });
         
         // Listen for key press to close window (only when over non-transparent pixels)
         document.addEventListener('keydown', (e) => {
+          console.log('Key pressed:', e.key);
           if (e.key.toLowerCase() === 'w' && isOverNonTransparentPixel) {
-            window.transparentWindow.close();
+            console.log('Closing window with W key');
+            if (window.transparentWindow) {
+              window.transparentWindow.close();
+            } else {
+              console.error('transparentWindow.close is not available');
+            }
           }
         });
 
@@ -215,20 +317,89 @@
             // Prevent default scrolling behavior
             e.preventDefault();
             
-            // Calculate new scale based on wheel direction
-            if (e.deltaY < 0) {
-              // Scroll up - zoom in
-              scale = Math.min(scale + scaleStep, maxScale);
-            } else {
-              // Scroll down - zoom out
-              scale = Math.max(scale - scaleStep, minScale);
+            try {
+              const transformWrapper = document.querySelector('.react-transform-wrapper');
+              if (!transformWrapper) {
+                console.error('Transform wrapper not found');
+                return;
+              }
+              
+              // Get zoom functions from React component
+              const wrapperInstance = transformWrapper._reactProps || transformWrapper.__reactProps$;
+              
+              if (wrapperInstance && wrapperInstance.children && typeof wrapperInstance.children === 'function') {
+                const { zoomIn, zoomOut } = wrapperInstance.children();
+                
+                if (e.deltaY < 0 && zoomIn) {
+                  // Zoom in
+                  zoomIn(0.1);
+                  console.log('Zooming in');
+                } else if (e.deltaY > 0 && zoomOut) {
+                  // Zoom out
+                  zoomOut(0.1);
+                  console.log('Zooming out');
+                }
+              } else {
+                console.log('Using fallback zoom method');
+                // Fallback zoom method - use CSS transform directly
+                const imageEl = document.getElementById('png-image');
+                if (!imageEl) return;
+                
+                const transformElement = document.querySelector('.react-transform-element');
+                if (!transformElement) return;
+                
+                const currentTransform = window.getComputedStyle(transformElement).transform;
+                let scale = 1;
+                
+                if (currentTransform && currentTransform !== 'none') {
+                  const matrix = currentTransform.match(/^matrix\((.+)\)$/);
+                  if (matrix) {
+                    const values = matrix[1].split(',');
+                    scale = Number(values[0]);
+                  }
+                }
+                
+                // Update scale based on wheel direction
+                if (e.deltaY < 0) {
+                  // Zoom in
+                  scale = Math.min(scale + 0.1, 10);
+                  console.log('Fallback zoom in to', scale);
+                } else {
+                  // Zoom out
+                  scale = Math.max(scale - 0.1, 0.1);
+                  console.log('Fallback zoom out to', scale);
+                }
+                
+                transformElement.style.transform = `matrix(${scale}, 0, 0, ${scale}, 0, 0)`;
+              }
+            } catch (error) {
+              console.error('Error during zoom:', error);
             }
-            
-            // Apply the new scale
-            applyScale();
           }
         }, { passive: false });
+
+        console.log('All event listeners initialized');
       }
+
+      // For testing - render directly if no image is provided within 5 seconds
+      setTimeout(() => {
+        if (!document.getElementById('png-image') || document.getElementById('png-image').style.display === 'none') {
+          console.log('No image loaded after timeout - rendering test image');
+          // Create a simple test image
+          const testImage = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGQAAABkCAYAAABw4pVUAAAAnElEQVR42u3RAQ0AAAjDMO5fNCCDkC5z0HXTBEEQBEEQBEEQBEEQBEEQBEEQBEEQBEEQBEEQBEEQBEEQBEEQBEEQBEEQBEEQBEEQBEEQBEEQBEEQBEEQBEEQBEEQBEEQBEEQBEEQBEEQBEEQBEEQBEEQBEEQBEEQBEEQBEEQBEEQBEEQBEEQBEEQBEEQBEEQBEEQBEEQBEEQZGzAA6Ke5T0WR7EDAAAAAElFTkSuQmCC';
+          
+          // Render our React component with the test image
+          ReactDOM.render(
+            React.createElement(ImageViewer, { imageData: testImage }),
+            root
+          );
+          
+          // Initialize mouse tracking and interactions
+          initializeInteractions();
+        }
+      }, 5000);
+
+      console.log('Transparent window script initialization complete');
     </script>
   </body>
 </html>
