@@ -41,35 +41,13 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(() => {
-  console.log('Electron app is ready');
-  createWindow();
-  
-  console.log('Initializing transparent window handlers');
-  setupTransparentWindowHandlers();
-  console.log('Transparent window handlers initialized');
-});
-
-app.on('window-all-closed', () => {
-  console.log('All windows closed');
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
-});
-
-app.on('activate', () => {
-  console.log('App activated');
-  if (mainWindow === null) {
-    createWindow();
-  }
-});
-
-// Set up IPC handlers for the main process
+// Set up IPC handlers first
 console.log('Setting up main process IPC handlers');
 
-ipcMain.handle('dialog:openDirectory', async () => {
+// Directory and file operations
+ipcMain.handle('dialog:openDirectory', async (event) => {
   console.log('Handling dialog:openDirectory request');
-  const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+  const { canceled, filePaths } = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender), {
     properties: ['openDirectory']
   });
   
@@ -121,5 +99,35 @@ ipcMain.handle('fs:readFile', async (_, filePath) => {
   }
 });
 
-// List all active handlers for debugging
-console.log('Registered IPC handlers:', ipcMain.eventNames());
+// Initialize transparent window handlers
+console.log('Initializing transparent window handlers');
+setupTransparentWindowHandlers();
+
+// Log registered handlers
+console.log('Main IPC handlers:', ['dialog:openDirectory', 'fs:readDirectory', 'fs:readFile']);
+
+// List all registered handlers
+const registeredHandlers = ipcMain.eventNames();
+console.log('All registered IPC handlers:', registeredHandlers);
+
+app.whenReady().then(() => {
+  console.log('Electron app is ready');
+  createWindow();
+  
+  // Check handlers again after app is ready
+  console.log('IPC handlers after app ready:', ipcMain.eventNames());
+});
+
+app.on('window-all-closed', () => {
+  console.log('All windows closed');
+  if (process.platform !== 'darwin') {
+    app.quit();
+  }
+});
+
+app.on('activate', () => {
+  console.log('App activated');
+  if (mainWindow === null) {
+    createWindow();
+  }
+});
