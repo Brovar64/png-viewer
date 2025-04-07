@@ -13,5 +13,7 @@ contextBridge.exposeInMainWorld('transparentWindow', {
       offsetX: Number(offsetX), 
       offsetY: Number(offsetY) 
     }),
-  close: () => ipcRenderer.send('window:close')
+  close: () => ipcRenderer.send('window:close'),
+  resizeWindow: (width, height) => 
+    ipcRenderer.send('window:resize', Number(width), Number(height))
 });
