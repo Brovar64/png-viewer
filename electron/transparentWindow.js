@@ -119,6 +119,63 @@ function setupTransparentWindowHandlers() {
       return { success: false, error: error.message };
     }
   });
+  
+  // Handle updating the window to a cropped image
+  ipcMain.handle('window:updateCroppedImage', async (event, croppedImageData, width, height) => {
+    try {
+      // Get the current window
+      const webContents = event.sender;
+      const win = BrowserWindow.fromWebContents(webContents);
+      if (!win) return { success: false, error: 'Window not found' };
+      
+      // Validate dimensions
+      const cropWidth = Number(width);
+      const cropHeight = Number(height);
+      
+      if (isNaN(cropWidth) || isNaN(cropHeight) || cropWidth < 10 || cropHeight < 10) {
+        return { success: false, error: 'Invalid crop dimensions' };
+      }
+      
+      // Add some padding to the window size
+      const paddingX = 10;
+      const paddingY = 10;
+      
+      // Get current position before resizing
+      const [currentX, currentY] = win.getPosition();
+      
+      // Resize the window to match the cropped image dimensions
+      win.setSize(Math.round(cropWidth + paddingX * 2), Math.round(cropHeight + paddingY * 2));
+      
+      // Send the cropped image data back to the window
+      const imageId = Date.now().toString();
+      imageDataCache.set(imageId, croppedImageData);
+      
+      // Clear the window by reloading, which will trigger the load-image event
+      win.webContents.reload();
+      
+      // When the window is reloaded, send the new image data
+      win.webContents.once('did-finish-load', () => {
+        const cachedImageData = imageDataCache.get(imageId);
+        if (!cachedImageData) {
+          console.error('Cropped image data not found in cache:', imageId);
+          return;
+        }
+        
+        win.webContents.send('load-image', {
+          imageData: cachedImageData,
+          imagePath: 'cropped_image.png' // placeholder path
+        });
+        
+        // Remove from cache after sending
+        imageDataCache.delete(imageId);
+      });
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error updating cropped image:', error);
+      return { success: false, error: error.message };
+    }
+  });
 
   // Handle window dragging using manual positioning
   ipcMain.on('window:dragStart', (event) => {
