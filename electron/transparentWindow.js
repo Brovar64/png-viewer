@@ -13,14 +13,14 @@ function createTransparentWindow(imagePath, imageId) {
   
   // Create a new BrowserWindow with transparent background and no frame
   const transparentWindow = new BrowserWindow({
-    width: 600,
+    width: 800,  // Larger default size for better viewing
     height: 600,
     transparent: true,
     frame: false,
     resizable: true,
     skipTaskbar: true,
     hasShadow: false,
-    useContentSize: true,  // Important: use content size for accurate resizing
+    useContentSize: true,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -30,13 +30,9 @@ function createTransparentWindow(imagePath, imageId) {
 
   // Position the window in the center of the screen
   transparentWindow.setPosition(
-    Math.floor(width / 2 - 300),
+    Math.floor(width / 2 - 400),
     Math.floor(height / 2 - 300)
   );
-
-  // Disable window size constraints
-  transparentWindow.setMinimumSize(100, 100);
-  transparentWindow.setMaximumSize(10000, 10000);
 
   // Load the transparent window HTML
   transparentWindow.loadURL(
@@ -162,7 +158,7 @@ function setupTransparentWindowHandlers() {
     }
   });
 
-  // Handle window resize based on zoomed image dimensions
+  // Handle window resize based on zoomed image dimensions (only used once for initial sizing)
   ipcMain.on('window:resize', (event, args) => {
     try {
       if (!args || typeof args !== 'object') {
@@ -172,20 +168,10 @@ function setupTransparentWindowHandlers() {
       
       let width = Number(args.width);
       let height = Number(args.height);
-      const relativeX = Number(args.relativeX) || 0.5; // Default to center if not provided
-      const relativeY = Number(args.relativeY) || 0.5; // Default to center if not provided
       
       // Validate dimensions
       if (isNaN(width) || isNaN(height) || width <= 0 || height <= 0) {
         console.error('Invalid dimensions in window:resize', args);
-        return;
-      }
-      
-      // Validate relative position (should be between 0 and 1)
-      if (isNaN(relativeX) || isNaN(relativeY) || 
-          relativeX < 0 || relativeX > 1 || 
-          relativeY < 0 || relativeY > 1) {
-        console.error('Invalid relative position in window:resize', args);
         return;
       }
       
@@ -202,32 +188,20 @@ function setupTransparentWindowHandlers() {
       width = Math.min(width, maxScreenWidth);
       height = Math.min(height, maxScreenHeight);
       
-      // Get current position and size
+      // Get current position
       const [currentX, currentY] = win.getPosition();
-      const [currentWidth, currentHeight] = win.getSize();
       
-      // Calculate new position to maintain the position under the mouse cursor
-      // This makes zooming feel more natural
-      const widthDiff = width - currentWidth;
-      const heightDiff = height - currentHeight;
+      // Calculate center position
+      const newX = Math.max(0, Math.floor(currentX - (width - win.getSize()[0]) / 2));
+      const newY = Math.max(0, Math.floor(currentY - (height - win.getSize()[1]) / 2));
       
-      // Move window based on the relative position (where the mouse is)
-      // If mouse is in the center (0.5, 0.5), this will center the resize
-      // If mouse is at the edge, it will maintain that edge's position
-      const newX = Math.round(currentX - (widthDiff * relativeX));
-      const newY = Math.round(currentY - (heightDiff * relativeY));
-      
-      // Make sure the window doesn't go off-screen
-      const adjustedX = Math.max(0, Math.min(newX, maxScreenWidth - width));
-      const adjustedY = Math.max(0, Math.min(newY, maxScreenHeight - height));
-      
-      // Apply the new size and position with animation disabled for smoother zooming
+      // Apply the new size and position
       win.setBounds({
-        x: adjustedX,
-        y: adjustedY,
+        x: newX,
+        y: newY,
         width: width,
         height: height
-      }, false); // false disables animation for smoother zoom
+      });
     } catch (error) {
       console.error('Error in window:resize handler:', error);
     }
