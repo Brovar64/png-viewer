@@ -7,7 +7,8 @@ An Electron + React application for browsing PNG files in a selected folder.
 - Select a folder to browse PNG files
 - Display thumbnails of PNG images
 - Show image file name and size
-- Zoom in/out of images using the mouse wheel
+- Zoom in/out of images using the mouse wheel (improved zooming centered on cursor)
+- Create cutout effect with "R" key for creative image presentations
 - Drag transparent PNGs by their visible parts
 - Simple and intuitive user interface
 
@@ -36,9 +37,10 @@ The application will launch and you can click the "Select PNG Folder" button to 
 ### Viewing and Interacting with Images
 
 - Click on any thumbnail to open the image in a dedicated transparent window
-- Use the mouse wheel to zoom in/out of the image
+- Use the mouse wheel to zoom in/out of the image (zoom centers on cursor position)
 - Drag the image by clicking and holding on any non-transparent part
 - Press 'W' key while hovering over the image to close the window
+- Press 'R' key to toggle the cutout mode (shows only the top half of the image)
 
 ## Building for Production
 
