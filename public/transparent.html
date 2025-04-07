@@ -12,30 +12,30 @@
         height: 100%;
         overflow: hidden;
         background: transparent;
-      }
-
-      body {
         user-select: none;
       }
 
       #image-container {
         position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
         display: flex;
         justify-content: center;
         align-items: center;
-        height: 100%;
-        width: 100%;
-        overflow: visible;
+        overflow: hidden;
         background: transparent;
       }
 
       #png-image {
-        position: relative;
         display: none;
+        position: absolute;
         max-width: none;
         max-height: none;
+        transform-origin: center;
         -webkit-user-drag: none;
-        transform-origin: center center;
+        pointer-events: auto;
       }
     </style>
   </head>
@@ -43,75 +43,81 @@
     <div id="image-container">
       <img id="png-image" alt="PNG Image" />
     </div>
-    <canvas id="hit-test-canvas" style="display: none;"></canvas>
+    <canvas id="hit-test-canvas" style="display:none;"></canvas>
 
     <script>
       // Get elements
       const imageEl = document.getElementById('png-image');
+      const imageContainer = document.getElementById('image-container');
       const hitTestCanvas = document.getElementById('hit-test-canvas');
       const ctx = hitTestCanvas.getContext('2d');
       
+      // State tracking variables
       let isOverNonTransparentPixel = false;
       let imagePath = '';
       
-      // For dragging
+      // Drag state
       let isDragging = false;
       let dragOffsetX = 0;
       let dragOffsetY = 0;
-      let initialClickOnNonTransparent = false;
-
-      // For zooming
+      
+      // Zoom state 
       let scale = 1;
       const minScale = 0.1;
       const maxScale = 10;
       const scaleStep = 0.1;
-
-      // Zoom without window resizing
-      let zoomWithoutResize = true;
+      
+      // For panning support
+      let isPanning = false;
+      let panStartX = 0;
+      let panStartY = 0;
+      let translateX = 0;
+      let translateY = 0;
 
       // Listen for image data from the main process
       window.transparentWindow.loadImage(({ imageData, imagePath: path }) => {
         imagePath = path;
         imageEl.src = imageData;
-        imageEl.style.display = 'block';
         
-        // Once image is loaded, prepare hit-testing canvas and initial sizing
+        // Once image is loaded
         imageEl.onload = () => {
+          // Make the image visible
+          imageEl.style.display = 'block';
+          
           // Size canvas to match image
           hitTestCanvas.width = imageEl.naturalWidth;
           hitTestCanvas.height = imageEl.naturalHeight;
           
           // Draw the image onto the canvas for pixel data access
           ctx.drawImage(imageEl, 0, 0);
-
-          // Set a small initial timeout to ensure proper initial sizing
-          setTimeout(() => {
-            // Tell main process about the actual image dimensions for initial sizing
-            const initialWidth = Math.min(imageEl.naturalWidth + 40, 800);
-            const initialHeight = Math.min(imageEl.naturalHeight + 40, 600);
-            
-            // Only resize window once at the beginning
-            window.transparentWindow.resizeWindow(initialWidth, initialHeight);
-            
-            // Apply initial scale
-            applyScale();
-  
-            // Initialize tracking
-            initializeInteractions();
-          }, 50);
+          
+          // Initialize interactivity
+          initializeInteractions();
+          
+          // Apply initial centering
+          resetImagePosition();
         };
       });
-
-      // Apply the current scale to the image
-      function applyScale() {
-        imageEl.style.transform = `scale(${scale})`;
+      
+      function resetImagePosition() {
+        // Reset zoom and position
+        scale = 1;
+        translateX = 0;
+        translateY = 0;
+        updateImageTransform();
+      }
+      
+      function updateImageTransform() {
+        // Apply all transformations at once
+        imageEl.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
       }
 
       // Check if a pixel at the given coordinates is transparent
       function isPixelTransparent(x, y) {
+        // Get the current image position and dimensions including transforms
         const rect = imageEl.getBoundingClientRect();
         
-        // Check if coordinates are outside image bounds
+        // Quick check if point is outside image bounds
         if (
           x < rect.left ||
           x > rect.right ||
@@ -149,99 +155,141 @@
       function initializeInteractions() {
         // Handle mouse move for pixel transparency detection and dragging
         document.addEventListener('mousemove', (e) => {
-          // If dragging is in progress, always move the window regardless of current pixel
+          // If dragging the window
           if (isDragging) {
             try {
-              // Ensure all values are proper numbers
-              const screenX = Number(e.screenX);
-              const screenY = Number(e.screenY);
-              const offsetX = Number(dragOffsetX);
-              const offsetY = Number(dragOffsetY);
-              
-              window.transparentWindow.drag(screenX, screenY, offsetX, offsetY);
+              window.transparentWindow.drag(e.screenX, e.screenY, dragOffsetX, dragOffsetY);
             } catch (error) {
               console.error('Error during drag:', error);
-              isDragging = false; // Stop dragging on error
+              isDragging = false;
             }
             return;
           }
           
-          // Not dragging, just check if we're over a non-transparent pixel
+          // If panning the image
+          if (isPanning) {
+            // Calculate how far the mouse has moved
+            const deltaX = e.clientX - panStartX;
+            const deltaY = e.clientY - panStartY;
+            
+            // Update pan position
+            translateX += deltaX;
+            translateY += deltaY;
+            updateImageTransform();
+            
+            // Reset start position for next move
+            panStartX = e.clientX;
+            panStartY = e.clientY;
+            return;
+          }
+          
+          // Otherwise, just check if we're over a non-transparent pixel
           isOverNonTransparentPixel = !isPixelTransparent(e.clientX, e.clientY);
           
           // Update cursor based on transparency
           document.body.style.cursor = isOverNonTransparentPixel ? 'move' : 'default';
         });
 
-        // Initialize window dragging
+        // Handle mouse down for dragging and panning
         document.addEventListener('mousedown', (e) => {
-          initialClickOnNonTransparent = !isPixelTransparent(e.clientX, e.clientY);
+          // Check if clicking on a non-transparent pixel
+          isOverNonTransparentPixel = !isPixelTransparent(e.clientX, e.clientY);
           
-          if (initialClickOnNonTransparent) {
-            // Start drag if clicked on non-transparent pixel
-            isDragging = true;
-            
-            // Calculate and store the click offset relative to the window
-            const rect = imageEl.getBoundingClientRect();
-            dragOffsetX = e.clientX - rect.left;
-            dragOffsetY = e.clientY - rect.top;
-            
-            // Tell the main process dragging has started
-            try {
-              window.transparentWindow.startDrag();
-            } catch (error) {
-              console.error('Error starting drag:', error);
-              isDragging = false;
+          if (isOverNonTransparentPixel) {
+            if (e.altKey || e.ctrlKey) {
+              // Alt or Ctrl key: pan the image
+              isPanning = true;
+              panStartX = e.clientX;
+              panStartY = e.clientY;
+            } else {
+              // Normal click: drag the window
+              isDragging = true;
+              
+              // Calculate offset from window edge
+              dragOffsetX = e.clientX;
+              dragOffsetY = e.clientY;
+              
+              // Tell electron dragging has started
+              try {
+                window.transparentWindow.startDrag();
+              } catch (error) {
+                console.error('Error starting drag:', error);
+                isDragging = false;
+              }
             }
             
             // Prevent default behaviors
             e.preventDefault();
           }
-          // If clicked on transparent area, do nothing so the click passes through
         });
 
-        // Handle drag end
-        window.addEventListener('mouseup', () => {
+        // Handle mouse up - end any drag or pan
+        document.addEventListener('mouseup', () => {
           isDragging = false;
-          initialClickOnNonTransparent = false;
+          isPanning = false;
         });
 
         // Also handle mouseup outside the window
         window.addEventListener('blur', () => {
           isDragging = false;
-          initialClickOnNonTransparent = false;
+          isPanning = false;
         });
         
         // Listen for key press to close window (only when over non-transparent pixels)
         document.addEventListener('keydown', (e) => {
           if (e.key.toLowerCase() === 'w' && isOverNonTransparentPixel) {
             window.transparentWindow.close();
+          } else if (e.key === 'r') {
+            // 'r' key resets zoom and position
+            resetImagePosition();
           }
         });
 
-        // Add mouse wheel event for zooming
+        // Handle zoom with mouse wheel
         document.addEventListener('wheel', (e) => {
           if (isOverNonTransparentPixel) {
-            // Prevent default scrolling behavior
             e.preventDefault();
             
-            // Calculate new scale based on wheel direction
+            // Store old scale for comparison
             const oldScale = scale;
             
+            // Get mouse position relative to image before scaling
+            const rect = imageEl.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            
+            // Calculate zoom direction
             if (e.deltaY < 0) {
-              // Scroll up - zoom in
+              // Zoom in
               scale = Math.min(scale + scaleStep, maxScale);
             } else {
-              // Scroll down - zoom out
+              // Zoom out
               scale = Math.max(scale - scaleStep, minScale);
             }
             
-            // Only apply scale if scale actually changed
             if (oldScale !== scale) {
-              applyScale();
+              // Calculate how the mouse position would change after scaling
+              const scaleFactor = scale / oldScale;
+              const newMouseX = mouseX * scaleFactor;
+              const newMouseY = mouseY * scaleFactor;
+              
+              // Adjust translation to keep the point under mouse fixed
+              translateX -= newMouseX - mouseX;
+              translateY -= newMouseY - mouseY;
+              
+              // Apply the transform
+              updateImageTransform();
             }
           }
         }, { passive: false });
+        
+        // Double-click to reset view
+        document.addEventListener('dblclick', (e) => {
+          if (isOverNonTransparentPixel) {
+            resetImagePosition();
+            e.preventDefault();
+          }
+        });
       }
     </script>
   </body>
