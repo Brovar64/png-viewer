@@ -9,8 +9,21 @@ function ImageThumbnail({ image, src }) {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
+  const handleClick = async () => {
+    if (!src) return; // Don't do anything if image isn't loaded yet
+    
+    try {
+      await window.electron.openTransparentWindow(image.path, src);
+    } catch (error) {
+      console.error('Error opening transparent window:', error);
+    }
+  };
+
   return (
-    <div className="border rounded-lg overflow-hidden bg-white shadow-sm hover:shadow-md transition-shadow">
+    <div 
+      className="border rounded-lg overflow-hidden bg-white shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+      onClick={handleClick}
+    >
       <div className="h-40 bg-gray-100 flex items-center justify-center">
         {src ? (
           <img 
