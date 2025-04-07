@@ -12,14 +12,15 @@ function createTransparentWindow(imagePath, imageId) {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
   
   // Create a new BrowserWindow with transparent background and no frame
-  // Using larger default size for better zooming experience
   const transparentWindow = new BrowserWindow({
     width: 600,
     height: 600,
     transparent: true,
     frame: false,
-    resizable: true, // Enable resizing to support dynamic content
+    resizable: true,
     skipTaskbar: true,
+    hasShadow: false,
+    useContentSize: true,  // Important: use content size for accurate resizing
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -32,6 +33,10 @@ function createTransparentWindow(imagePath, imageId) {
     Math.floor(width / 2 - 300),
     Math.floor(height / 2 - 300)
   );
+
+  // Disable window size constraints
+  transparentWindow.setMinimumSize(100, 100);
+  transparentWindow.setMaximumSize(10000, 10000);
 
   // Load the transparent window HTML
   transparentWindow.loadURL(
@@ -165,10 +170,10 @@ function setupTransparentWindowHandlers() {
         return;
       }
       
-      const width = Number(args.width);
-      const height = Number(args.height);
+      let width = Number(args.width);
+      let height = Number(args.height);
       
-      // Validate that values are numbers and have reasonable size
+      // Validate dimensions
       if (isNaN(width) || isNaN(height) || width <= 0 || height <= 0) {
         console.error('Invalid dimensions in window:resize', args);
         return;
@@ -178,25 +183,34 @@ function setupTransparentWindowHandlers() {
       const win = BrowserWindow.fromWebContents(webContents);
       if (!win) return;
       
-      // Get current position
+      // Get screen constraints
+      const { workAreaSize } = screen.getPrimaryDisplay();
+      const maxScreenWidth = workAreaSize.width;
+      const maxScreenHeight = workAreaSize.height;
+      
+      // Ensure window isn't larger than screen
+      width = Math.min(width, maxScreenWidth);
+      height = Math.min(height, maxScreenHeight);
+      
+      // Get current position and size
       const [currentX, currentY] = win.getPosition();
       const [currentWidth, currentHeight] = win.getSize();
       
       // Calculate new position to keep the window centered
-      const newX = Math.round(currentX - ((width - currentWidth) / 2));
-      const newY = Math.round(currentY - ((height - currentHeight) / 2));
+      const newX = Math.max(0, Math.round(currentX - ((width - currentWidth) / 2)));
+      const newY = Math.max(0, Math.round(currentY - ((height - currentHeight) / 2)));
       
-      // Add padding around the image
-      const paddedWidth = Math.min(width + 40, screen.getPrimaryDisplay().workAreaSize.width);
-      const paddedHeight = Math.min(height + 40, screen.getPrimaryDisplay().workAreaSize.height);
+      // Make sure the window doesn't go off-screen
+      const adjustedX = Math.min(newX, maxScreenWidth - width);
+      const adjustedY = Math.min(newY, maxScreenHeight - height);
       
-      // Resize and reposition window to maintain center point
+      // Apply the new size and position
       win.setBounds({
-        x: newX,
-        y: newY,
-        width: paddedWidth,
-        height: paddedHeight
-      });
+        x: adjustedX,
+        y: adjustedY,
+        width: width,
+        height: height
+      }, true); // The 'true' argument enables animation
     } catch (error) {
       console.error('Error in window:resize handler:', error);
     }
