@@ -1,10 +1,14 @@
 const { BrowserWindow, ipcMain, screen } = require('electron');
 const path = require('path');
 const isDev = require('electron-is-dev');
+const fs = require('fs');
 
 let transparentWindows = new Map();
 
-function createTransparentWindow(imagePath, imageData) {
+// Store image data temporarily
+const imageDataCache = new Map();
+
+function createTransparentWindow(imagePath, imageId) {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
   
   // Create a new BrowserWindow with transparent background and no frame
@@ -41,10 +45,20 @@ function createTransparentWindow(imagePath, imageData) {
   
   // When window is ready, send the image data
   transparentWindow.webContents.on('did-finish-load', () => {
+    // Get the image data from cache
+    const imageData = imageDataCache.get(imageId);
+    if (!imageData) {
+      console.error('Image data not found in cache:', imageId);
+      return;
+    }
+    
     transparentWindow.webContents.send('load-image', {
       imageData,
       imagePath
     });
+    
+    // Remove from cache after sending
+    imageDataCache.delete(imageId);
   });
 
   // Remove window reference when closed
@@ -65,7 +79,40 @@ function setupTransparentWindowHandlers() {
     }
     
     try {
-      createTransparentWindow(imagePath, imageData);
+      // Generate a unique ID for this image data
+      const imageId = Date.now().toString();
+      
+      // Store the image data in cache
+      imageDataCache.set(imageId, imageData);
+      
+      // Create the window with a reference to the cached data
+      createTransparentWindow(imagePath, imageId);
+      return { success: true };
+    } catch (error) {
+      console.error('Error creating transparent window:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Alternative approach - read file directly in main process instead of passing base64 data
+  ipcMain.handle('window:openTransparentFile', async (_, imagePath) => {
+    // If window for this image already exists, focus it instead of creating a new one
+    if (transparentWindows.has(imagePath)) {
+      transparentWindows.get(imagePath).focus();
+      return { success: true };
+    }
+    
+    try {
+      // Read the file directly
+      const data = await fs.promises.readFile(imagePath);
+      const imageId = Date.now().toString();
+      const base64Data = `data:image/png;base64,${data.toString('base64')}`;
+      
+      // Store the image data in cache
+      imageDataCache.set(imageId, base64Data);
+      
+      // Create window
+      createTransparentWindow(imagePath, imageId);
       return { success: true };
     } catch (error) {
       console.error('Error creating transparent window:', error);
