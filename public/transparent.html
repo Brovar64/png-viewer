@@ -66,6 +66,16 @@
       const maxScale = 10;
       const scaleStep = 0.1;
 
+      // Last mouse position for smooth zooming
+      let lastMouseX = 0;
+      let lastMouseY = 0;
+      let lastClientX = 0;
+      let lastClientY = 0;
+
+      // Window size tracking
+      let currentWindowWidth = 0;
+      let currentWindowHeight = 0;
+      
       // Listen for image data from the main process
       window.transparentWindow.loadImage(({ imageData, imagePath: path }) => {
         imagePath = path;
@@ -86,7 +96,9 @@
             // Tell main process about the actual image dimensions for initial sizing
             const initialWidth = Math.min(imageEl.naturalWidth, 800);
             const initialHeight = Math.min(imageEl.naturalHeight, 600);
-            window.transparentWindow.resizeWindow(initialWidth, initialHeight);
+            currentWindowWidth = initialWidth;
+            currentWindowHeight = initialHeight;
+            window.transparentWindow.resizeWindow(initialWidth, initialHeight, 0, 0);
             
             // Apply initial scale
             applyScale();
@@ -98,7 +110,7 @@
       });
 
       // Apply the current scale to the image and resize window
-      function applyScale() {
+      function applyScale(mouseX, mouseY, clientX, clientY) {
         // Apply the scale transform
         imageEl.style.transform = `scale(${scale})`;
         
@@ -106,8 +118,28 @@
         const scaledWidth = Math.ceil(imageEl.naturalWidth * scale) + 40;  // Add padding
         const scaledHeight = Math.ceil(imageEl.naturalHeight * scale) + 40; // Add padding
         
+        // Calculate mouse position relative to window (percentage)
+        let relativeX = 0.5; // Default to center
+        let relativeY = 0.5; // Default to center
+        
+        if (mouseX && mouseY && clientX !== undefined && clientY !== undefined) {
+          // Use mouse position for zoom focus
+          const rect = imageEl.getBoundingClientRect();
+          relativeX = (clientX - rect.left) / rect.width;
+          relativeY = (clientY - rect.top) / rect.height;
+        }
+        
         // Request window resize to fit the scaled image
-        window.transparentWindow.resizeWindow(scaledWidth, scaledHeight);
+        window.transparentWindow.resizeWindow(
+          scaledWidth, 
+          scaledHeight,
+          relativeX,
+          relativeY
+        );
+        
+        // Update current window size
+        currentWindowWidth = scaledWidth;
+        currentWindowHeight = scaledHeight;
       }
 
       // Check if a pixel at the given coordinates is transparent
@@ -150,8 +182,13 @@
       }
 
       function initializeInteractions() {
-        // Handle mouse move for pixel transparency detection and dragging
+        // Track mouse position
         document.addEventListener('mousemove', (e) => {
+          lastMouseX = e.screenX;
+          lastMouseY = e.screenY;
+          lastClientX = e.clientX;
+          lastClientY = e.clientY;
+          
           // If dragging is in progress, always move the window regardless of current pixel
           if (isDragging) {
             try {
@@ -241,7 +278,8 @@
             
             // Only apply scale and resize window if scale actually changed
             if (oldScale !== scale) {
-              applyScale();
+              // Pass current mouse position for centered zooming
+              applyScale(lastMouseX, lastMouseY, e.clientX, e.clientY);
             }
           }
         }, { passive: false });
