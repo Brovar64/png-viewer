@@ -126,10 +126,14 @@
         }
 
         // Get pixel data (RGBA)
-        const pixelData = ctx.getImageData(imgX, imgY, 1, 1).data;
-        
-        // Check alpha channel (index 3) for transparency
-        return pixelData[3] === 0;
+        try {
+          const pixelData = ctx.getImageData(imgX, imgY, 1, 1).data;
+          // Check alpha channel (index 3) for transparency
+          return pixelData[3] === 0;
+        } catch (error) {
+          console.error('Error checking pixel transparency:', error);
+          return true; // Assume transparent on error
+        }
       }
 
       function initializeInteractions() {
@@ -137,12 +141,18 @@
         document.addEventListener('mousemove', (e) => {
           // If dragging is in progress, always move the window regardless of current pixel
           if (isDragging) {
-            window.transparentWindow.drag(
-              e.screenX, 
-              e.screenY, 
-              dragOffsetX, 
-              dragOffsetY
-            );
+            try {
+              // Ensure all values are proper numbers
+              const screenX = Number(e.screenX);
+              const screenY = Number(e.screenY);
+              const offsetX = Number(dragOffsetX);
+              const offsetY = Number(dragOffsetY);
+              
+              window.transparentWindow.drag(screenX, screenY, offsetX, offsetY);
+            } catch (error) {
+              console.error('Error during drag:', error);
+              isDragging = false; // Stop dragging on error
+            }
             return;
           }
           
@@ -167,7 +177,12 @@
             dragOffsetY = e.clientY - rect.top;
             
             // Tell the main process dragging has started
-            window.transparentWindow.startDrag();
+            try {
+              window.transparentWindow.startDrag();
+            } catch (error) {
+              console.error('Error starting drag:', error);
+              isDragging = false;
+            }
             
             // Prevent default behaviors
             e.preventDefault();
