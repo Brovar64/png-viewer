@@ -93,13 +93,16 @@
       <button class="btn" id="closeBtn" title="Close">✕</button>
     </div>
     <canvas id="hit-test-canvas" style="display: none;"></canvas>
+    <canvas id="crop-canvas" style="display: none;"></canvas>
 
     <script>
       // Get elements
       const imageEl = document.getElementById('png-image');
       const imageContainer = document.getElementById('image-container');
       const hitTestCanvas = document.getElementById('hit-test-canvas');
+      const cropCanvas = document.getElementById('crop-canvas');
       const ctx = hitTestCanvas.getContext('2d');
+      const cropCtx = cropCanvas.getContext('2d');
       const controls = document.querySelector('.controls');
       const zoomInBtn = document.getElementById('zoomIn');
       const zoomOutBtn = document.getElementById('zoomOut');
@@ -121,38 +124,127 @@
       const maxScale = 10;
       const scaleStep = 0.1;
 
+      // Function to find non-transparent edges of an image
+      function findNonTransparentBounds(ctx, width, height) {
+        let left = width;
+        let right = 0;
+        let top = height;
+        let bottom = 0;
+        
+        const imageData = ctx.getImageData(0, 0, width, height);
+        const data = imageData.data;
+        
+        // Scan through the entire image data
+        for (let y = 0; y < height; y++) {
+          for (let x = 0; x < width; x++) {
+            const alpha = data[((y * width + x) * 4) + 3];
+            
+            if (alpha > 0) {
+              left = Math.min(left, x);
+              right = Math.max(right, x);
+              top = Math.min(top, y);
+              bottom = Math.max(bottom, y);
+            }
+          }
+        }
+        
+        // Add a small padding to avoid clipping the image too tightly
+        const padding = 1;
+        left = Math.max(0, left - padding);
+        top = Math.max(0, top - padding);
+        right = Math.min(width - 1, right + padding);
+        bottom = Math.min(height - 1, bottom + padding);
+        
+        // If no visible pixels are found, return null
+        if (left > right || top > bottom) {
+          return null;
+        }
+        
+        return {
+          left,
+          top,
+          right,
+          bottom,
+          width: right - left + 1,
+          height: bottom - top + 1
+        };
+      }
+
+      // Function to crop an image to its non-transparent content
+      function cropToContent(sourceCanvas, bounds) {
+        if (!bounds) return null;
+        
+        // Set crop canvas dimensions
+        cropCanvas.width = bounds.width;
+        cropCanvas.height = bounds.height;
+        
+        // Draw the cropped portion of the image onto the crop canvas
+        cropCtx.drawImage(
+          sourceCanvas,
+          bounds.left, bounds.top, bounds.width, bounds.height,
+          0, 0, bounds.width, bounds.height
+        );
+        
+        return cropCanvas.toDataURL('image/png');
+      }
+
       // Listen for image data from the main process
       window.transparentWindow.loadImage(({ imageData, imagePath: path }) => {
         imagePath = path;
-        imageEl.src = imageData;
-        imageEl.style.display = 'block';
         
-        // Once image is loaded, prepare hit-testing canvas
-        imageEl.onload = () => {
+        // Load image into temporary image element to get dimensions
+        const tempImg = new Image();
+        tempImg.onload = () => {
           // Size canvas to match image
-          hitTestCanvas.width = imageEl.naturalWidth;
-          hitTestCanvas.height = imageEl.naturalHeight;
+          hitTestCanvas.width = tempImg.width;
+          hitTestCanvas.height = tempImg.height;
           
           // Draw the image onto the canvas for pixel data access
-          ctx.drawImage(imageEl, 0, 0);
-
+          ctx.drawImage(tempImg, 0, 0);
+          
+          // Find non-transparent bounds
+          const bounds = findNonTransparentBounds(ctx, tempImg.width, tempImg.height);
+          
+          if (bounds) {
+            // Crop the image to content
+            const croppedImageData = cropToContent(hitTestCanvas, bounds);
+            
+            // Set the cropped image
+            if (croppedImageData) {
+              imageEl.src = croppedImageData;
+            } else {
+              // Fallback to original if cropping failed
+              imageEl.src = imageData;
+            }
+          } else {
+            // No non-transparent pixels found, use original
+            imageEl.src = imageData;
+          }
+          
+          imageEl.style.display = 'block';
+          
           // Set initial scale
           updateScale();
           
           // Set initial window size based on image dimensions
-          // IMPORTANT: We only set the window size ONCE, on initial load
           const initialPadding = 50;
+          const imgWidth = (bounds ? bounds.width : tempImg.width);
+          const imgHeight = (bounds ? bounds.height : tempImg.height);
+          
           const initialWidth = Math.min(window.screen.availWidth * 0.9, 
-                                     imageEl.naturalWidth + initialPadding * 2);
+                                     imgWidth + initialPadding * 2);
           const initialHeight = Math.min(window.screen.availHeight * 0.9, 
-                                      imageEl.naturalHeight + initialPadding * 2);
+                                      imgHeight + initialPadding * 2);
           
           // Set the window size once, then never change it
           window.transparentWindow.resize(initialWidth, initialHeight, true);
-
+          
           // Initialize interaction handlers
           initializeInteractions();
         };
+        
+        // Set the source to the original image data to load it
+        tempImg.src = imageData;
       });
       
       // Apply the scale without changing the centered position
