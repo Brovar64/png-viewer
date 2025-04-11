@@ -12,13 +12,13 @@ function createTransparentWindow(imagePath, imageId) {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
   
   // Create a new BrowserWindow with transparent background and no frame
-  // Using larger default size for better zooming experience
+  // Using fixed size window
   const transparentWindow = new BrowserWindow({
     width: 600,
     height: 600,
     transparent: true,
     frame: false,
-    resizable: true,
+    resizable: false, // Changed to false to prevent resizing
     skipTaskbar: true,
     hasShadow: false,
     // Disable resize animation to prevent momentary jumps
@@ -163,41 +163,10 @@ function setupTransparentWindowHandlers() {
     }
   });
 
-  // Handle window resize with combined position adjustment
-  ipcMain.on('window:resize', (event, { width, height, keepCentered = true }) => {
-    try {
-      const webContents = event.sender;
-      const win = BrowserWindow.fromWebContents(webContents);
-      if (!win) return;
-      
-      // Ensure values are numbers and have minimums
-      const newWidth = Math.max(200, Number(width) || 600);
-      const newHeight = Math.max(200, Number(height) || 600);
-      
-      // Calculate position adjustments to maintain the same center
-      if (keepCentered) {
-        // Get current position and size
-        const [x, y] = win.getPosition();
-        const [oldWidth, oldHeight] = win.getSize();
-        
-        // Calculate position deltas to maintain center point
-        const deltaX = Math.floor((newWidth - oldWidth) / 2);
-        const deltaY = Math.floor((newHeight - oldHeight) / 2);
-        
-        // Set new position and size simultaneously to prevent flicker
-        win.setBounds({
-          x: x - deltaX,
-          y: y - deltaY,
-          width: newWidth,
-          height: newHeight
-        }, true); // true = animate (but animation is disabled in window config)
-      } else {
-        // Just resize without repositioning
-        win.setSize(Math.round(newWidth), Math.round(newHeight));
-      }
-    } catch (error) {
-      console.error('Error in window:resize handler:', error);
-    }
+  // Handle window resize - disabled since we're keeping window size fixed
+  ipcMain.on('window:resize', (event) => {
+    // Nothing to do - window is non-resizable
+    return;
   });
 
   // Handle window close
