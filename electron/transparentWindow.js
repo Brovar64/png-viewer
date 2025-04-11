@@ -12,14 +12,16 @@ function createTransparentWindow(imagePath, imageId) {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
   
   // Create a new BrowserWindow with transparent background and no frame
-  // Using larger default size for better zooming experience
+  // Making the window resizable to allow dynamic resizing during zoom
   const transparentWindow = new BrowserWindow({
     width: 600,
     height: 600,
     transparent: true,
     frame: false,
-    resizable: false,
+    resizable: true,
     skipTaskbar: true,
+    hasShadow: false,
+    useContentSize: true,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -122,7 +124,6 @@ function setupTransparentWindowHandlers() {
 
   // Handle window dragging using manual positioning
   ipcMain.on('window:dragStart', (event) => {
-    // Just acknowledge the drag start
     event.returnValue = true;
   });
   
@@ -154,6 +155,24 @@ function setupTransparentWindowHandlers() {
       win.setPosition(Math.round(mouseX - offsetX), Math.round(mouseY - offsetY));
     } catch (error) {
       console.error('Error in window:drag handler:', error);
+    }
+  });
+
+  // Handle window resize
+  ipcMain.on('window:resize', (event, { width, height }) => {
+    try {
+      const webContents = event.sender;
+      const win = BrowserWindow.fromWebContents(webContents);
+      if (!win) return;
+      
+      // Ensure values are numbers and have minimums
+      const newWidth = Math.max(200, Number(width) || 600);
+      const newHeight = Math.max(200, Number(height) || 600);
+      
+      // Set the window content size
+      win.setContentSize(Math.round(newWidth), Math.round(newHeight));
+    } catch (error) {
+      console.error('Error in window:resize handler:', error);
     }
   });
 
