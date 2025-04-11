@@ -110,6 +110,14 @@
       let dragStartX = 0;
       let dragStartY = 0;
       let initialClickOnNonTransparent = false;
+      
+      // Add tracking for accumulated drag distance to detect potential size creep
+      let totalDragOffsetX = 0;
+      let totalDragOffsetY = 0;
+      
+      // Store original window size
+      let originalWindowWidth = 0;
+      let originalWindowHeight = 0;
 
       // For zooming
       let scale = 1;
@@ -142,6 +150,10 @@
                                      imageEl.naturalWidth + initialPadding * 2);
           const initialHeight = Math.min(window.screen.availHeight * 0.9, 
                                       imageEl.naturalHeight + initialPadding * 2);
+          
+          // Store original window size for drag reset
+          originalWindowWidth = initialWidth;
+          originalWindowHeight = initialHeight;
           
           // Set the window size once, then never change it
           window.transparentWindow.resize(initialWidth, initialHeight, true);
@@ -215,7 +227,11 @@
               dragStartX = e.screenX;
               dragStartY = e.screenY;
               
-              // Move the window
+              // Track the total window movement to detect size creep
+              totalDragOffsetX += deltaX;
+              totalDragOffsetY += deltaY;
+              
+              // Move the window without changing its size
               window.transparentWindow.drag(e.screenX, e.screenY, deltaX, deltaY);
             } catch (error) {
               console.error('Error during drag:', error);
@@ -246,6 +262,10 @@
             dragStartX = e.screenX;
             dragStartY = e.screenY;
             
+            // Reset drag offset tracking
+            totalDragOffsetX = 0;
+            totalDragOffsetY = 0;
+            
             // Tell the main process dragging has started
             try {
               window.transparentWindow.startDrag();
@@ -260,16 +280,33 @@
           // If clicked on transparent area, do nothing so the click passes through
         });
 
-        // Handle drag end
+        // Handle drag end with size correction
         window.addEventListener('mouseup', () => {
+          if (isDragging) {
+            // At the end of a drag operation, confirm the window size hasn't changed
+            // by forcing a size reset using the original dimensions
+            window.transparentWindow.resetSize(originalWindowWidth, originalWindowHeight);
+            
+            // Reset drag tracking
+            totalDragOffsetX = 0;
+            totalDragOffsetY = 0;
+          }
+          
           isDragging = false;
           initialClickOnNonTransparent = false;
         });
 
         // Also handle mouseup outside the window
         window.addEventListener('blur', () => {
+          if (isDragging) {
+            // Reset size on blur as well
+            window.transparentWindow.resetSize(originalWindowWidth, originalWindowHeight);
+          }
+          
           isDragging = false;
           initialClickOnNonTransparent = false;
+          totalDragOffsetX = 0;
+          totalDragOffsetY = 0;
         });
         
         // Listen for key press to close window (only when over non-transparent pixels)

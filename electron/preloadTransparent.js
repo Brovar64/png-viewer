@@ -13,6 +13,12 @@ contextBridge.exposeInMainWorld('transparentWindow', {
       offsetX: Number(offsetX), 
       offsetY: Number(offsetY) 
     }),
+  // Added resetSize method to force window size reset after drag operations
+  resetSize: (width, height) => 
+    ipcRenderer.send('window:resetSize', { 
+      width: Number(width), 
+      height: Number(height)
+    }),
   // Added keepCentered param to control centering behavior
   resize: (width, height, keepCentered = true) => 
     ipcRenderer.send('window:resize', { 
