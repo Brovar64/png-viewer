@@ -58,7 +58,7 @@ The packaged application will be available in the `dist` directory.
 - Electron: Desktop application framework
 - React: UI library
 - TailwindCSS: Utility-first CSS framework
-- Canvas: Image processing library for transparency detection
+- Jimp: Pure JavaScript image processing library for transparency detection
 
 ## License
 
