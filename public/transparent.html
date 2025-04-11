@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#000000" />
     <title>PNG Viewer - Transparent Window</title>
-    <link rel="stylesheet" href="../node_modules/openseadragon/build/openseadragon/openseadragon.min.css" />
     <style>
       html, body {
         margin: 0;
@@ -78,6 +77,19 @@
         display: none !important;
       }
     </style>
+    <script>
+      // Dynamically load OpenSeadragon based on environment
+      // This avoids issues with file paths in development vs production
+      const script = document.createElement('script');
+      if (window.navigator.userAgent.indexOf('Electron') > -1) {
+        // We're in Electron, use the path to node_modules
+        script.src = '../node_modules/openseadragon/build/openseadragon/openseadragon.min.js';
+      } else {
+        // Fallback for browser testing
+        script.src = 'https://cdn.jsdelivr.net/npm/openseadragon@4.1.0/build/openseadragon/openseadragon.min.js';
+      }
+      document.head.appendChild(script);
+    </script>
   </head>
   <body>
     <div id="openseadragon-container"></div>
@@ -89,262 +101,280 @@
     </div>
     <canvas id="hit-test-canvas" style="display: none;"></canvas>
 
-    <script src="../node_modules/openseadragon/build/openseadragon/openseadragon.min.js"></script>
     <script>
-      // Core variables
-      let viewer = null;
-      let imageLoaded = false;
-      let isOverNonTransparentPixel = false;
-      let imagePath = '';
-      let hitTestCanvas = document.getElementById('hit-test-canvas');
-      let ctx = hitTestCanvas.getContext('2d');
-      
-      // For dragging window
-      let isDragging = false;
-      let dragStartX = 0;
-      let dragStartY = 0;
-      let initialClickOnNonTransparent = false;
-
-      // Get control elements
-      const zoomInBtn = document.getElementById('zoomIn');
-      const zoomOutBtn = document.getElementById('zoomOut');
-      const zoomResetBtn = document.getElementById('zoomReset');
-      const closeBtn = document.getElementById('closeBtn');
-
-      // OpenSeadragon configuration options for transparent image
-      const viewerOptions = {
-        id: "openseadragon-container",
-        prefixUrl: "../node_modules/openseadragon/build/openseadragon/images/",
-        showNavigator: false,
-        showNavigationControl: false, // Hide default controls
-        animationTime: 0.3,
-        blendTime: 0,
-        constrainDuringPan: true,
-        maxZoomPixelRatio: 10,
-        minZoomImageRatio: 0.1,
-        visibilityRatio: 0,
-        zoomPerScroll: 1.2,
-        springStiffness: 15,
-        preserveViewport: true,
-        debugMode: false,
-        immediateRender: true,
-        autoResize: true,
-        backgroundColor: "rgba(0,0,0,0)", // Important for transparency
-        showFullPageControl: false,
-        showHomeControl: false,
-        showZoomControl: false
-      };
-
-      // Initialize the viewer (but don't load image yet)
-      viewer = OpenSeadragon(viewerOptions);
-
-      // Listen for image data from the main process
-      window.transparentWindow.loadImage(({ imageData, imagePath: path }) => {
-        imagePath = path;
-        
-        // Create a new image to get dimensions
-        const tempImage = new Image();
-        tempImage.onload = function() {
-          // Size canvas to match image for hit testing
-          hitTestCanvas.width = tempImage.width;
-          hitTestCanvas.height = tempImage.height;
-          
-          // Draw the image onto the canvas for pixel data access
-          ctx.drawImage(tempImage, 0, 0);
-          
-          // Now add the image to OpenSeadragon
-          viewer.addTiledImage({
-            tileSource: {
-              type: 'image',
-              url: imageData,
-              buildPyramid: false,
-              width: tempImage.width,
-              height: tempImage.height
-            },
-            x: 0,
-            y: 0,
-            width: 1
-          });
-          
-          // Mark as loaded
-          imageLoaded = true;
-          
-          // Initialize interactions
-          initializeInteractions();
-          
-          // Resize window to fit image initially
-          const windowPadding = 50;
-          const targetWidth = Math.min(window.screen.availWidth * 0.9, tempImage.width + windowPadding * 2);
-          const targetHeight = Math.min(window.screen.availHeight * 0.9, tempImage.height + windowPadding * 2);
-          window.transparentWindow.resize(targetWidth, targetHeight, true);
-        };
-        tempImage.src = imageData;
-      });
-      
-      // Check if a pixel at the given coordinates is transparent
-      function isPixelTransparent(x, y) {
-        // Get image position in viewport
-        const viewer_bounds = viewer.viewport.getBounds();
-        const container_size = viewer.viewport.getContainerSize();
-        
-        // Convert window coordinates to image coordinates
-        const image_point = viewer.viewport.windowToImageCoordinates(new OpenSeadragon.Point(x, y));
-        
-        // Round to integer pixel values
-        const imgX = Math.floor(image_point.x);
-        const imgY = Math.floor(image_point.y);
-        
-        // Check if coordinates are within canvas bounds
-        if (
-          imgX < 0 || 
-          imgX >= hitTestCanvas.width || 
-          imgY < 0 || 
-          imgY >= hitTestCanvas.height
-        ) {
-          return true;
+      // Wait for OpenSeadragon to load
+      function waitForOpenSeadragon() {
+        if (typeof OpenSeadragon === 'undefined') {
+          setTimeout(waitForOpenSeadragon, 100);
+          return;
         }
-
-        // Get pixel data (RGBA)
-        try {
-          const pixelData = ctx.getImageData(imgX, imgY, 1, 1).data;
-          // Check alpha channel (index 3) for transparency
-          return pixelData[3] === 0;
-        } catch (error) {
-          console.error('Error checking pixel transparency:', error);
-          return true; // Assume transparent on error
-        }
+        initializeViewer();
       }
+      
+      function initializeViewer() {
+        // Core variables
+        let viewer = null;
+        let imageLoaded = false;
+        let isOverNonTransparentPixel = false;
+        let imagePath = '';
+        let hitTestCanvas = document.getElementById('hit-test-canvas');
+        let ctx = hitTestCanvas.getContext('2d');
+        
+        // For dragging window
+        let isDragging = false;
+        let dragStartX = 0;
+        let dragStartY = 0;
+        let initialClickOnNonTransparent = false;
 
-      function initializeInteractions() {
-        // Handle mouse move for pixel transparency detection and dragging
-        document.addEventListener('mousemove', (e) => {
-          // Skip transparency check on controls
-          if (e.target.closest('.custom-controls')) {
-            document.body.style.cursor = 'default';
-            return;
-          }
+        // Get control elements
+        const zoomInBtn = document.getElementById('zoomIn');
+        const zoomOutBtn = document.getElementById('zoomOut');
+        const zoomResetBtn = document.getElementById('zoomReset');
+        const closeBtn = document.getElementById('closeBtn');
+
+        // Determine image path prefix based on environment
+        const imagePathPrefix = window.navigator.userAgent.indexOf('Electron') > -1
+          ? '../node_modules/openseadragon/build/openseadragon/images/'
+          : 'https://cdn.jsdelivr.net/npm/openseadragon@4.1.0/build/openseadragon/images/';
+
+        // OpenSeadragon configuration options for transparent image
+        const viewerOptions = {
+          id: "openseadragon-container",
+          prefixUrl: imagePathPrefix,
+          showNavigator: false,
+          showNavigationControl: false, // Hide default controls
+          animationTime: 0.3,
+          blendTime: 0,
+          constrainDuringPan: true,
+          maxZoomPixelRatio: 10,
+          minZoomImageRatio: 0.1,
+          visibilityRatio: 0,
+          zoomPerScroll: 1.2,
+          springStiffness: 15,
+          preserveViewport: true,
+          debugMode: false,
+          immediateRender: true,
+          autoResize: true,
+          backgroundColor: "rgba(0,0,0,0)", // Important for transparency
+          showFullPageControl: false,
+          showHomeControl: false,
+          showZoomControl: false
+        };
+
+        // Initialize the viewer (but don't load image yet)
+        viewer = OpenSeadragon(viewerOptions);
+
+        // Listen for image data from the main process
+        window.transparentWindow.loadImage(({ imageData, imagePath: path }) => {
+          imagePath = path;
           
-          // If dragging is in progress, always move the window regardless of current pixel
-          if (isDragging) {
-            try {
-              // Calculate how much the mouse has moved
-              const deltaX = e.screenX - dragStartX;
-              const deltaY = e.screenY - dragStartY;
-              
-              // Update the drag start position
+          // Create a new image to get dimensions
+          const tempImage = new Image();
+          tempImage.onload = function() {
+            // Size canvas to match image for hit testing
+            hitTestCanvas.width = tempImage.width;
+            hitTestCanvas.height = tempImage.height;
+            
+            // Draw the image onto the canvas for pixel data access
+            ctx.drawImage(tempImage, 0, 0);
+            
+            // Now add the image to OpenSeadragon
+            viewer.addTiledImage({
+              tileSource: {
+                type: 'image',
+                url: imageData,
+                buildPyramid: false,
+                width: tempImage.width,
+                height: tempImage.height
+              },
+              x: 0,
+              y: 0,
+              width: 1
+            });
+            
+            // Mark as loaded
+            imageLoaded = true;
+            
+            // Initialize interactions
+            initializeInteractions();
+            
+            // Resize window to fit image initially
+            const windowPadding = 50;
+            const targetWidth = Math.min(window.screen.availWidth * 0.9, tempImage.width + windowPadding * 2);
+            const targetHeight = Math.min(window.screen.availHeight * 0.9, tempImage.height + windowPadding * 2);
+            window.transparentWindow.resize(targetWidth, targetHeight, true);
+          };
+          tempImage.src = imageData;
+        });
+        
+        // Check if a pixel at the given coordinates is transparent
+        function isPixelTransparent(x, y) {
+          // Get image position in viewport
+          const viewerBounds = viewer.viewport.getBounds();
+          const containerSize = viewer.viewport.getContainerSize();
+          
+          // Convert window coordinates to image coordinates
+          const imagePoint = viewer.viewport.windowToImageCoordinates(new OpenSeadragon.Point(x, y));
+          
+          // Round to integer pixel values
+          const imgX = Math.floor(imagePoint.x);
+          const imgY = Math.floor(imagePoint.y);
+          
+          // Check if coordinates are within canvas bounds
+          if (
+            imgX < 0 || 
+            imgX >= hitTestCanvas.width || 
+            imgY < 0 || 
+            imgY >= hitTestCanvas.height
+          ) {
+            return true;
+          }
+
+          // Get pixel data (RGBA)
+          try {
+            const pixelData = ctx.getImageData(imgX, imgY, 1, 1).data;
+            // Check alpha channel (index 3) for transparency
+            return pixelData[3] === 0;
+          } catch (error) {
+            console.error('Error checking pixel transparency:', error);
+            return true; // Assume transparent on error
+          }
+        }
+
+        function initializeInteractions() {
+          // Handle mouse move for pixel transparency detection and dragging
+          document.addEventListener('mousemove', (e) => {
+            // Skip transparency check on controls
+            if (e.target.closest('.custom-controls')) {
+              document.body.style.cursor = 'default';
+              return;
+            }
+            
+            // If dragging is in progress, always move the window regardless of current pixel
+            if (isDragging) {
+              try {
+                // Calculate how much the mouse has moved
+                const deltaX = e.screenX - dragStartX;
+                const deltaY = e.screenY - dragStartY;
+                
+                // Update the drag start position
+                dragStartX = e.screenX;
+                dragStartY = e.screenY;
+                
+                // Move the window
+                window.transparentWindow.drag(e.screenX, e.screenY, deltaX, deltaY);
+              } catch (error) {
+                console.error('Error during drag:', error);
+                isDragging = false; // Stop dragging on error
+              }
+              return;
+            }
+            
+            // Not dragging, just check if we're over a non-transparent pixel
+            isOverNonTransparentPixel = !isPixelTransparent(e.clientX, e.clientY);
+            
+            // Update cursor based on transparency
+            document.body.style.cursor = isOverNonTransparentPixel ? 'move' : 'default';
+          });
+
+          // Initialize window dragging
+          document.addEventListener('mousedown', (e) => {
+            // Skip if we're clicking on OpenSeadragon controls or our custom controls
+            if (e.target.closest('.custom-controls') || 
+                e.target.className === 'openseadragon-canvas') {
+              return;
+            }
+            
+            initialClickOnNonTransparent = !isPixelTransparent(e.clientX, e.clientY);
+            
+            if (initialClickOnNonTransparent) {
+              // Start drag if clicked on non-transparent pixel
+              isDragging = true;
               dragStartX = e.screenX;
               dragStartY = e.screenY;
               
-              // Move the window
-              window.transparentWindow.drag(e.screenX, e.screenY, deltaX, deltaY);
-            } catch (error) {
-              console.error('Error during drag:', error);
-              isDragging = false; // Stop dragging on error
-            }
-            return;
-          }
-          
-          // Not dragging, just check if we're over a non-transparent pixel
-          isOverNonTransparentPixel = !isPixelTransparent(e.clientX, e.clientY);
-          
-          // Update cursor based on transparency
-          document.body.style.cursor = isOverNonTransparentPixel ? 'move' : 'default';
-        });
-
-        // Initialize window dragging
-        document.addEventListener('mousedown', (e) => {
-          // Skip if we're clicking on OpenSeadragon controls or our custom controls
-          if (e.target.closest('.custom-controls') || 
-              e.target.closest('.openseadragon-canvas')) {
-            return;
-          }
-          
-          initialClickOnNonTransparent = !isPixelTransparent(e.clientX, e.clientY);
-          
-          if (initialClickOnNonTransparent) {
-            // Start drag if clicked on non-transparent pixel
-            isDragging = true;
-            dragStartX = e.screenX;
-            dragStartY = e.screenY;
-            
-            // Tell the main process dragging has started
-            try {
-              window.transparentWindow.startDrag();
-            } catch (error) {
-              console.error('Error starting drag:', error);
-              isDragging = false;
-            }
-            
-            // Prevent default behaviors
-            e.preventDefault();
-          }
-          // If clicked on transparent area, do nothing so the click passes through
-        });
-
-        // Handle drag end
-        window.addEventListener('mouseup', () => {
-          isDragging = false;
-          initialClickOnNonTransparent = false;
-        });
-
-        // Also handle mouseup outside the window
-        window.addEventListener('blur', () => {
-          isDragging = false;
-          initialClickOnNonTransparent = false;
-        });
-        
-        // Listen for key press to close window
-        document.addEventListener('keydown', (e) => {
-          if (e.key.toLowerCase() === 'w' && isOverNonTransparentPixel) {
-            window.transparentWindow.close();
-          }
-        });
-        
-        // Connect our custom controls to OpenSeadragon
-        zoomInBtn.addEventListener('click', () => {
-          viewer.viewport.zoomBy(1.2);
-        });
-        
-        zoomOutBtn.addEventListener('click', () => {
-          viewer.viewport.zoomBy(0.8);
-        });
-        
-        zoomResetBtn.addEventListener('click', () => {
-          viewer.viewport.goHome();
-        });
-        
-        closeBtn.addEventListener('click', () => {
-          window.transparentWindow.close();
-        });
-        
-        // Handle viewport changes to update window size
-        viewer.addHandler('animation', () => {
-          // Skip resizing during animation for smoother transitions
-        });
-        
-        viewer.addHandler('animation-finish', () => {
-          // After animation completes, check if we need to resize
-          const zoom = viewer.viewport.getZoom();
-          if (zoom > 1) {
-            // Get the image bounds
-            const bounds = viewer.viewport.getBounds();
-            const containerSize = viewer.viewport.getContainerSize();
-            
-            // Calculate viewport size in image pixels
-            const viewportWidth = containerSize.x * zoom;
-            const viewportHeight = containerSize.y * zoom;
-            
-            // Only resize if needed
-            if (viewportWidth > window.innerWidth || viewportHeight > window.innerHeight) {
-              const padding = 50;
-              const targetWidth = Math.min(window.screen.availWidth * 0.9, viewportWidth + padding * 2);
-              const targetHeight = Math.min(window.screen.availHeight * 0.9, viewportHeight + padding * 2);
+              // Tell the main process dragging has started
+              try {
+                window.transparentWindow.startDrag();
+              } catch (error) {
+                console.error('Error starting drag:', error);
+                isDragging = false;
+              }
               
-              window.transparentWindow.resize(targetWidth, targetHeight, true);
+              // Prevent default behaviors
+              e.preventDefault();
             }
-          }
-        });
+            // If clicked on transparent area, do nothing so the click passes through
+          });
+
+          // Handle drag end
+          window.addEventListener('mouseup', () => {
+            isDragging = false;
+            initialClickOnNonTransparent = false;
+          });
+
+          // Also handle mouseup outside the window
+          window.addEventListener('blur', () => {
+            isDragging = false;
+            initialClickOnNonTransparent = false;
+          });
+          
+          // Listen for key press to close window
+          document.addEventListener('keydown', (e) => {
+            if (e.key.toLowerCase() === 'w' && isOverNonTransparentPixel) {
+              window.transparentWindow.close();
+            }
+          });
+          
+          // Connect our custom controls to OpenSeadragon
+          zoomInBtn.addEventListener('click', () => {
+            viewer.viewport.zoomBy(1.2);
+          });
+          
+          zoomOutBtn.addEventListener('click', () => {
+            viewer.viewport.zoomBy(0.8);
+          });
+          
+          zoomResetBtn.addEventListener('click', () => {
+            viewer.viewport.goHome();
+          });
+          
+          closeBtn.addEventListener('click', () => {
+            window.transparentWindow.close();
+          });
+          
+          // Handle viewport changes to update window size
+          viewer.addHandler('animation', () => {
+            // Skip resizing during animation for smoother transitions
+          });
+          
+          viewer.addHandler('animation-finish', () => {
+            // After animation completes, check if we need to resize
+            const zoom = viewer.viewport.getZoom();
+            if (zoom > 1) {
+              // Get the image bounds
+              const bounds = viewer.viewport.getBounds();
+              const containerSize = viewer.viewport.getContainerSize();
+              
+              // Calculate viewport size in image pixels
+              const viewportWidth = containerSize.x * zoom;
+              const viewportHeight = containerSize.y * zoom;
+              
+              // Only resize if needed
+              if (viewportWidth > window.innerWidth || viewportHeight > window.innerHeight) {
+                const padding = 50;
+                const targetWidth = Math.min(window.screen.availWidth * 0.9, viewportWidth + padding * 2);
+                const targetHeight = Math.min(window.screen.availHeight * 0.9, viewportHeight + padding * 2);
+                
+                window.transparentWindow.resize(targetWidth, targetHeight, true);
+              }
+            }
+          });
+        }
       }
+      
+      // Start the initialization process when script loads
+      window.addEventListener('load', waitForOpenSeadragon);
     </script>
   </body>
 </html>
