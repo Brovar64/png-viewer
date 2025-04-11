@@ -12,7 +12,7 @@ function createTransparentWindow(imagePath, imageId) {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
   
   // Create a new BrowserWindow with transparent background and no frame
-  // Using larger default size for better zooming experience
+  // Using a moderate default size
   const transparentWindow = new BrowserWindow({
     width: 600,
     height: 600,
@@ -190,7 +190,7 @@ function setupTransparentWindowHandlers() {
           y: y - deltaY,
           width: newWidth,
           height: newHeight
-        }, true); // true = animate (but animation is disabled in window config)
+        }, false); // false = no animation for better performance
       } else {
         // Just resize without repositioning
         win.setSize(Math.round(newWidth), Math.round(newHeight));
@@ -200,7 +200,7 @@ function setupTransparentWindowHandlers() {
     }
   });
   
-  // New handler for resize and position in a single operation
+  // Handler for resize and position in a single operation
   ipcMain.on('window:resizeAndPosition', (event, { width, height, x, y }) => {
     try {
       const webContents = event.sender;
@@ -219,10 +219,30 @@ function setupTransparentWindowHandlers() {
         y: newY,
         width: newWidth,
         height: newHeight
-      }, false); // false = no animation for instant positioning
+      }, false); // false = no animation
       
     } catch (error) {
       console.error('Error in window:resizeAndPosition handler:', error);
+    }
+  });
+  
+  // Optimized setBounds handler - more straightforward
+  ipcMain.on('window:setBounds', (event, { width, height, x, y }) => {
+    try {
+      const webContents = event.sender;
+      const win = BrowserWindow.fromWebContents(webContents);
+      if (!win) return;
+      
+      // Ensure values are numbers and have minimums
+      const newWidth = Math.max(200, Number(width) || 600);
+      const newHeight = Math.max(200, Number(height) || 600);
+      const newX = Number(x) || 0;
+      const newY = Number(y) || 0;
+      
+      // Set bounds directly with no animation for better performance
+      win.setBounds({ x: newX, y: newY, width: newWidth, height: newHeight }, false);
+    } catch (error) {
+      console.error('Error in window:setBounds handler:', error);
     }
   });
 
