@@ -124,6 +124,9 @@
       const minScale = 0.1;
       const maxScale = 10;
       const scaleStep = 0.1;
+      
+      // Flag to track if we've already set the window size
+      let windowSizeInitialized = false;
 
       // Function to find non-transparent edges of an image
       function findNonTransparentBounds(ctx, width, height) {
@@ -228,13 +231,16 @@
           // Set initial scale
           updateScale();
           
-          // Set initial window size based on image dimensions
-          // Use the original window size (600x600) from transparentWindow.js
-          const initialWidth = 600;
-          const initialHeight = 600;
-          
-          // Set the window size once, then never change it
-          window.transparentWindow.resize(initialWidth, initialHeight, true);
+          // Set window size only once on initial load
+          if (!windowSizeInitialized) {
+            // Use the original window size (600x600) from transparentWindow.js
+            const initialWidth = 600;
+            const initialHeight = 600;
+            
+            // Set the window size once, then never change it
+            window.transparentWindow.resize(initialWidth, initialHeight, true);
+            windowSizeInitialized = true;
+          }
           
           // Initialize interaction handlers
           initializeInteractions();
@@ -409,8 +415,6 @@
             if (oldScale !== scale) {
               // Apply the new scale - this will scale from the center due to transform-origin
               updateScale();
-              
-              // NO WINDOW RESIZING - this eliminates the jumping
             }
           }
         }, { passive: false });
