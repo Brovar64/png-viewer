@@ -23,7 +23,7 @@
         display: block;
         height: 100%;
         width: 100%;
-        overflow: hidden;
+        overflow: visible;
       }
 
       #png-image {
@@ -68,6 +68,10 @@
       const minScale = 0.1;
       const maxScale = 10;
       const scaleStep = 0.1;
+      
+      // Original image dimensions
+      let originalWidth = 0;
+      let originalHeight = 0;
 
       // Listen for image data from the main process
       window.transparentWindow.loadImage(({ imageData, imagePath: path }) => {
@@ -77,14 +81,18 @@
         
         // Once image is loaded, prepare hit-testing canvas
         imageEl.onload = () => {
+          // Store original dimensions
+          originalWidth = imageEl.naturalWidth;
+          originalHeight = imageEl.naturalHeight;
+          
           // Size canvas to match image
-          hitTestCanvas.width = imageEl.naturalWidth;
-          hitTestCanvas.height = imageEl.naturalHeight;
+          hitTestCanvas.width = originalWidth;
+          hitTestCanvas.height = originalHeight;
           
           // Draw the image onto the canvas for pixel data access
           ctx.drawImage(imageEl, 0, 0);
 
-          // Apply initial scale
+          // Apply initial scale and resize window
           applyScale();
 
           // Initialize tracking
@@ -92,9 +100,16 @@
         };
       });
 
-      // Apply the current scale to the image
+      // Apply the current scale to the image and resize window
       function applyScale() {
         imageEl.style.transform = `scale(${scale})`;
+        
+        // Calculate new dimensions based on scale
+        const newWidth = Math.ceil(originalWidth * scale);
+        const newHeight = Math.ceil(originalHeight * scale);
+        
+        // Request window resize from main process
+        window.transparentWindow.resizeWindow(newWidth, newHeight);
       }
 
       // Check if a pixel at the given coordinates is transparent
@@ -209,7 +224,8 @@
           }
         });
 
-        // Add mouse wheel event for zooming
+        // Add mouse wheel event for zooming with debounce
+        let zoomTimeout = null;
         document.addEventListener('wheel', (e) => {
           if (isOverNonTransparentPixel) {
             // Prevent default scrolling behavior
@@ -224,8 +240,14 @@
               scale = Math.max(scale - scaleStep, minScale);
             }
             
-            // Apply the new scale
-            applyScale();
+            // Apply the new scale to the image immediately
+            imageEl.style.transform = `scale(${scale})`;
+            
+            // Debounce window resize to avoid excessive IPC calls
+            clearTimeout(zoomTimeout);
+            zoomTimeout = setTimeout(() => {
+              applyScale();
+            }, 100);
           }
         }, { passive: false });
       }
