@@ -2,7 +2,7 @@ const { BrowserWindow, ipcMain, screen } = require('electron');
 const path = require('path');
 const isDev = require('electron-is-dev');
 const fs = require('fs');
-const { createCanvas, loadImage } = require('canvas');
+const Jimp = require('jimp');
 
 let transparentWindows = new Map();
 
@@ -12,41 +12,34 @@ const imageDataCache = new Map();
 // Find the bounding box of non-transparent pixels in the image
 async function findBoundingBox(imagePath) {
   try {
-    // Load the image
-    const img = await loadImage(imagePath);
+    // Read the image with Jimp
+    const image = await Jimp.read(imagePath);
     
-    // Create a canvas with the image dimensions
-    const canvas = createCanvas(img.width, img.height);
-    const ctx = canvas.getContext('2d');
+    // Image dimensions
+    const width = image.getWidth();
+    const height = image.getHeight();
     
-    // Draw the image on the canvas
-    ctx.drawImage(img, 0, 0);
-    
-    // Get the image data
-    const imageData = ctx.getImageData(0, 0, img.width, img.height);
-    const { data, width, height } = imageData;
-    
-    // Find the boundaries of non-transparent pixels
+    // Initialize bounds
     let minX = width;
     let minY = height;
     let maxX = 0;
     let maxY = 0;
     let hasNonTransparentPixels = false;
     
-    // Loop through all pixels to find non-transparent ones
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        const idx = (y * width + x) * 4;
-        // Check alpha value (non-transparent)
-        if (data[idx + 3] > 0) {
-          minX = Math.min(minX, x);
-          minY = Math.min(minY, y);
-          maxX = Math.max(maxX, x);
-          maxY = Math.max(maxY, y);
-          hasNonTransparentPixels = true;
-        }
+    // Scan the image for non-transparent pixels
+    image.scan(0, 0, width, height, function(x, y, idx) {
+      // Get alpha value (fourth value in RGBA)
+      const alpha = this.bitmap.data[idx + 3];
+      
+      // If pixel is not transparent
+      if (alpha > 0) {
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+        hasNonTransparentPixels = true;
       }
-    }
+    });
     
     return hasNonTransparentPixels ? {
       x: minX,
@@ -68,14 +61,13 @@ function createTransparentWindow(imagePath, imageId, boundingBox) {
   
   // Use bounding box dimensions if available, otherwise use defaults
   const windowWidth = boundingBox 
-    ? Math.min(window.screen.availWidth * 0.9, boundingBox.width + padding * 2) 
+    ? Math.min(width * 0.9, boundingBox.width + padding * 2) 
     : 600;
   const windowHeight = boundingBox 
-    ? Math.min(window.screen.availHeight * 0.9, boundingBox.height + padding * 2) 
+    ? Math.min(height * 0.9, boundingBox.height + padding * 2) 
     : 600;
   
   // Create a new BrowserWindow with transparent background and no frame
-  // Using calculated size for better zooming experience
   const transparentWindow = new BrowserWindow({
     width: windowWidth,
     height: windowHeight,
@@ -94,9 +86,6 @@ function createTransparentWindow(imagePath, imageId, boundingBox) {
     }
   });
 
-  // Add red outline to the window
-  transparentWindow.setBackgroundColor('#FF000000'); // Transparent background with red tint
-  
   // Position the window in the center of the screen
   transparentWindow.setPosition(
     Math.floor(width / 2 - windowWidth / 2),
