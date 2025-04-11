@@ -14,7 +14,8 @@ contextBridge.exposeInMainWorld('transparentWindow', {
       offsetY: Number(offsetY) 
     }),
   // Added keepCentered param to control centering behavior
-  resize: (width, height, keepCentered = true) => 
+  // We're using a strict false flag for resize operations now to ensure no growth
+  resize: (width, height, keepCentered = false) => 
     ipcRenderer.send('window:resize', { 
       width: Number(width), 
       height: Number(height),
