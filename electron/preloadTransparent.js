@@ -20,5 +20,13 @@ contextBridge.exposeInMainWorld('transparentWindow', {
       height: Number(height),
       keepCentered: keepCentered
     }),
+  // New method to resize and position in one operation
+  resizeAndPosition: (width, height, x, y) =>
+    ipcRenderer.send('window:resizeAndPosition', {
+      width: Number(width),
+      height: Number(height),
+      x: Number(x),
+      y: Number(y)
+    }),
   close: () => ipcRenderer.send('window:close')
 });
