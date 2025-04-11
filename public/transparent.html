@@ -17,6 +17,9 @@
 
       body {
         user-select: none;
+        border: 2px solid #ff0000;
+        box-sizing: border-box;
+        border-radius: 4px;
       }
 
       #image-container {
@@ -76,6 +79,24 @@
       .btn:hover {
         background: rgba(0, 0, 0, 0.9);
       }
+
+      /* Add outline toggle control */
+      #outline-toggle {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        z-index: 10;
+        opacity: 0;
+        transition: opacity 0.2s;
+      }
+
+      body:hover #outline-toggle {
+        opacity: 0.7;
+      }
+
+      #outline-toggle:hover {
+        opacity: 1 !important;
+      }
     </style>
   </head>
   <body>
@@ -88,6 +109,10 @@
       <button class="btn" id="zoomReset" title="Reset Zoom">↺</button>
       <button class="btn" id="closeBtn" title="Close">✕</button>
     </div>
+    <label id="outline-toggle">
+      <input type="checkbox" id="toggle-outline" checked />
+      Toggle outline
+    </label>
     <canvas id="hit-test-canvas" style="display: none;"></canvas>
 
     <script>
@@ -101,6 +126,7 @@
       const zoomOutBtn = document.getElementById('zoomOut');
       const zoomResetBtn = document.getElementById('zoomReset');
       const closeBtn = document.getElementById('closeBtn');
+      const toggleOutlineCheckbox = document.getElementById('toggle-outline');
       
       let isOverNonTransparentPixel = false;
       let imagePath = '';
@@ -116,6 +142,11 @@
       const minScale = 0.1;
       const maxScale = 10;
       const scaleStep = 0.1;
+
+      // Toggle outline when checkbox state changes
+      toggleOutlineCheckbox.addEventListener('change', () => {
+        document.body.style.border = toggleOutlineCheckbox.checked ? '2px solid #ff0000' : 'none';
+      });
 
       // Listen for image data from the main process
       window.transparentWindow.loadImage(({ imageData, imagePath: path }) => {
@@ -199,7 +230,7 @@
         // Handle mouse move for pixel transparency detection and dragging
         document.addEventListener('mousemove', (e) => {
           // Skip transparency check on controls
-          if (e.target.closest('.controls')) {
+          if (e.target.closest('.controls') || e.target.closest('#outline-toggle')) {
             document.body.style.cursor = 'default';
             return;
           }
@@ -234,7 +265,7 @@
         // Initialize window dragging
         document.addEventListener('mousedown', (e) => {
           // Skip dragging if clicked on controls
-          if (e.target.closest('.controls')) {
+          if (e.target.closest('.controls') || e.target.closest('#outline-toggle')) {
             return;
           }
           
