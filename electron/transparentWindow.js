@@ -20,6 +20,7 @@ function createTransparentWindow(imagePath, imageId) {
     frame: false,
     resizable: false,
     skipTaskbar: true,
+    hasShadow: false,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -154,6 +155,63 @@ function setupTransparentWindowHandlers() {
       win.setPosition(Math.round(mouseX - offsetX), Math.round(mouseY - offsetY));
     } catch (error) {
       console.error('Error in window:drag handler:', error);
+    }
+  });
+
+  // Handle window resize for zooming
+  ipcMain.on('window:resize', (event, args) => {
+    try {
+      // Safety checks and number conversion
+      if (!args || typeof args !== 'object') {
+        console.error('Invalid argument format in window:resize');
+        return;
+      }
+      
+      let width = Number(args.width);
+      let height = Number(args.height);
+      
+      // Validate that values are numbers
+      if (isNaN(width) || isNaN(height)) {
+        console.error('Invalid dimensions in window:resize', args);
+        return;
+      }
+      
+      // Add padding to the dimensions
+      width += 40;  // 20px padding on each side
+      height += 40; // 20px padding on each side
+
+      // Get screen dimensions to ensure we don't resize beyond screen bounds
+      const { width: screenWidth, height: screenHeight } = screen.getPrimaryDisplay().workAreaSize;
+
+      // Limit window size to screen dimensions
+      width = Math.min(width, screenWidth);
+      height = Math.min(height, screenHeight);
+      
+      // Ensure minimum size
+      width = Math.max(width, 200);
+      height = Math.max(height, 200);
+      
+      const webContents = event.sender;
+      const win = BrowserWindow.fromWebContents(webContents);
+      if (!win) return;
+      
+      // Get current position
+      const [currentX, currentY] = win.getPosition();
+      
+      // Calculate the center point of the current window
+      const centerX = currentX + (win.getSize()[0] / 2);
+      const centerY = currentY + (win.getSize()[1] / 2);
+      
+      // Resize window
+      win.setSize(Math.round(width), Math.round(height));
+      
+      // Re-center window based on new size
+      win.setPosition(
+        Math.round(centerX - (width / 2)),
+        Math.round(centerY - (height / 2))
+      );
+    } catch (error) {
+      console.error('Error in window:resize handler:', error);
     }
   });
 
