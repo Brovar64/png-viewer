@@ -12,7 +12,7 @@ function createTransparentWindow(imagePath, imageId) {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
   
   // Create a new BrowserWindow with transparent background and no frame
-  // Making the window resizable to allow dynamic resizing during zoom
+  // Using larger default size for better zooming experience
   const transparentWindow = new BrowserWindow({
     width: 600,
     height: 600,
@@ -21,7 +21,6 @@ function createTransparentWindow(imagePath, imageId) {
     resizable: true,
     skipTaskbar: true,
     hasShadow: false,
-    useContentSize: true,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -138,11 +137,11 @@ function setupTransparentWindowHandlers() {
       
       const mouseX = Number(args.mouseX);
       const mouseY = Number(args.mouseY);
-      const offsetX = Number(args.offsetX);
-      const offsetY = Number(args.offsetY);
+      const offsetX = Number(args.offsetX || 0);
+      const offsetY = Number(args.offsetY || 0);
       
       // Validate that all values are numbers
-      if (isNaN(mouseX) || isNaN(mouseY) || isNaN(offsetX) || isNaN(offsetY)) {
+      if (isNaN(mouseX) || isNaN(mouseY)) {
         console.error('Invalid coordinates in window:drag', args);
         return;
       }
@@ -151,8 +150,11 @@ function setupTransparentWindowHandlers() {
       const win = BrowserWindow.fromWebContents(webContents);
       if (!win) return;
       
-      // Set the window position based on mouse position and offset
-      win.setPosition(Math.round(mouseX - offsetX), Math.round(mouseY - offsetY));
+      // Get current position
+      const [x, y] = win.getPosition();
+      
+      // Set the window position - using the mouse position and optional offsets
+      win.setPosition(x + offsetX, y + offsetY);
     } catch (error) {
       console.error('Error in window:drag handler:', error);
     }
@@ -169,8 +171,19 @@ function setupTransparentWindowHandlers() {
       const newWidth = Math.max(200, Number(width) || 600);
       const newHeight = Math.max(200, Number(height) || 600);
       
-      // Set the window content size
-      win.setContentSize(Math.round(newWidth), Math.round(newHeight));
+      // Get current position
+      const [x, y] = win.getPosition();
+      const [oldWidth, oldHeight] = win.getSize();
+      
+      // Calculate center-preserving position
+      const newX = x - Math.floor((newWidth - oldWidth) / 2);
+      const newY = y - Math.floor((newHeight - oldHeight) / 2);
+      
+      // Set the window size
+      win.setSize(Math.round(newWidth), Math.round(newHeight));
+      
+      // Set the window position to keep the window centered
+      win.setPosition(newX, newY);
     } catch (error) {
       console.error('Error in window:resize handler:', error);
     }
