@@ -10,6 +10,7 @@
         margin: 0;
         padding: 0;
         height: 100%;
+        width: 100%;
         overflow: hidden;
         background: transparent;
       }
@@ -118,7 +119,7 @@
       
       // Window sizing
       let windowPadding = 50;
-      let resizeTimeout = null;
+      let resizeInProgress = false;
       let imageLoaded = false;
       let initialWindowWidth = 600;
       let initialWindowHeight = 600;
@@ -148,8 +149,8 @@
           // Mark image as loaded
           imageLoaded = true;
           
-          // Update window size initially
-          updateWindowSize();
+          // Update window size initially but don't resize - just measure
+          calculateWindowSize();
 
           // Initialize tracking
           initializeInteractions();
@@ -161,36 +162,45 @@
         imageEl.style.transform = `scale(${scale})`;
       }
       
+      // Calculate window size without triggering resize
+      function calculateWindowSize() {
+        if (!imageLoaded) return null;
+        
+        // Calculate the scaled dimensions plus padding
+        const scaledWidth = Math.ceil(imageEl.naturalWidth * scale) + windowPadding * 2;
+        const scaledHeight = Math.ceil(imageEl.naturalHeight * scale) + windowPadding * 2;
+        
+        // Set window size (with bounds checking for very large images)
+        const maxWidth = window.screen.availWidth * 0.9;
+        const maxHeight = window.screen.availHeight * 0.9;
+        
+        const targetWidth = Math.min(maxWidth, Math.max(300, scaledWidth));
+        const targetHeight = Math.min(maxHeight, Math.max(300, scaledHeight));
+        
+        return { width: targetWidth, height: targetHeight };
+      }
+      
       // Update window size based on current image dimensions and scale
       function updateWindowSize() {
-        if (!imageLoaded) return;
+        if (resizeInProgress) return;
         
-        // Clear any pending resize
-        if (resizeTimeout) {
-          clearTimeout(resizeTimeout);
+        const newSize = calculateWindowSize();
+        if (!newSize) return;
+        
+        // Only resize if the size has meaningfully changed to avoid unnecessary recentering
+        if (Math.abs(window.innerWidth - newSize.width) > 20 || 
+            Math.abs(window.innerHeight - newSize.height) > 20) {
+          
+          resizeInProgress = true;
+          
+          // This uses the improved function that sets size and position atomically
+          window.transparentWindow.resize(newSize.width, newSize.height, true);
+          
+          // Reset flag after a delay to avoid multiple fast resizes
+          setTimeout(() => {
+            resizeInProgress = false;
+          }, 200);
         }
-        
-        // Set a timeout to avoid too many resize operations
-        resizeTimeout = setTimeout(() => {
-          // Calculate the scaled dimensions plus padding
-          const scaledWidth = imageEl.naturalWidth * scale + windowPadding * 2;
-          const scaledHeight = imageEl.naturalHeight * scale + windowPadding * 2;
-          
-          // Set window size (with bounds checking for very large images)
-          const maxWidth = window.screen.availWidth * 0.9;
-          const maxHeight = window.screen.availHeight * 0.9;
-          
-          const targetWidth = Math.min(maxWidth, Math.max(300, scaledWidth));
-          const targetHeight = Math.min(maxHeight, Math.max(300, scaledHeight));
-          
-          // Only resize if the size has meaningfully changed to avoid unnecessary recentering
-          if (Math.abs(window.innerWidth - targetWidth) > 20 || 
-              Math.abs(window.innerHeight - targetHeight) > 20) {
-            window.transparentWindow.resize(targetWidth, targetHeight);
-          }
-          
-          resizeTimeout = null;
-        }, 100); // Throttle resize events
       }
 
       // Check if a pixel at the given coordinates is transparent
@@ -339,8 +349,10 @@
               // Apply the new scale - this will scale from the center due to transform-origin
               updateScale();
               
-              // Update window size when scale changes
-              updateWindowSize();
+              // Update window size when scale changes - but don't do it if already in progress
+              if (!resizeInProgress) {
+                updateWindowSize();
+              }
             }
           }
         }, { passive: false });
