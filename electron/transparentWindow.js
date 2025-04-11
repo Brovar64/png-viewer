@@ -21,6 +21,9 @@ function createTransparentWindow(imagePath, imageId) {
     resizable: true,
     skipTaskbar: true,
     hasShadow: false,
+    // Disable resize animation to prevent momentary jumps
+    animateAppIcon: false,
+    autoHideMenuBar: true,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -160,8 +163,8 @@ function setupTransparentWindowHandlers() {
     }
   });
 
-  // Handle window resize
-  ipcMain.on('window:resize', (event, { width, height }) => {
+  // Handle window resize with combined position adjustment
+  ipcMain.on('window:resize', (event, { width, height, keepCentered = true }) => {
     try {
       const webContents = event.sender;
       const win = BrowserWindow.fromWebContents(webContents);
@@ -171,19 +174,27 @@ function setupTransparentWindowHandlers() {
       const newWidth = Math.max(200, Number(width) || 600);
       const newHeight = Math.max(200, Number(height) || 600);
       
-      // Get current position
-      const [x, y] = win.getPosition();
-      const [oldWidth, oldHeight] = win.getSize();
-      
-      // Calculate center-preserving position
-      const newX = x - Math.floor((newWidth - oldWidth) / 2);
-      const newY = y - Math.floor((newHeight - oldHeight) / 2);
-      
-      // Set the window size
-      win.setSize(Math.round(newWidth), Math.round(newHeight));
-      
-      // Set the window position to keep the window centered
-      win.setPosition(newX, newY);
+      // Calculate position adjustments to maintain the same center
+      if (keepCentered) {
+        // Get current position and size
+        const [x, y] = win.getPosition();
+        const [oldWidth, oldHeight] = win.getSize();
+        
+        // Calculate position deltas to maintain center point
+        const deltaX = Math.floor((newWidth - oldWidth) / 2);
+        const deltaY = Math.floor((newHeight - oldHeight) / 2);
+        
+        // Set new position and size simultaneously to prevent flicker
+        win.setBounds({
+          x: x - deltaX,
+          y: y - deltaY,
+          width: newWidth,
+          height: newHeight
+        }, true); // true = animate (but animation is disabled in window config)
+      } else {
+        // Just resize without repositioning
+        win.setSize(Math.round(newWidth), Math.round(newHeight));
+      }
     } catch (error) {
       console.error('Error in window:resize handler:', error);
     }
