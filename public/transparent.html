@@ -111,6 +111,7 @@
       
       let isOverNonTransparentPixel = false;
       let imagePath = '';
+      let imageBounds = null;
       
       // For dragging
       let isDragging = false;
@@ -203,11 +204,11 @@
           ctx.drawImage(tempImg, 0, 0);
           
           // Find non-transparent bounds
-          const bounds = findNonTransparentBounds(ctx, tempImg.width, tempImg.height);
+          imageBounds = findNonTransparentBounds(ctx, tempImg.width, tempImg.height);
           
-          if (bounds) {
+          if (imageBounds) {
             // Crop the image to content
-            const croppedImageData = cropToContent(hitTestCanvas, bounds);
+            const croppedImageData = cropToContent(hitTestCanvas, imageBounds);
             
             // Set the cropped image
             if (croppedImageData) {
@@ -215,6 +216,7 @@
             } else {
               // Fallback to original if cropping failed
               imageEl.src = imageData;
+              imageBounds = null;
             }
           } else {
             // No non-transparent pixels found, use original
@@ -228,8 +230,8 @@
           
           // Set initial window size based on image dimensions
           const initialPadding = 50;
-          const imgWidth = (bounds ? bounds.width : tempImg.width);
-          const imgHeight = (bounds ? bounds.height : tempImg.height);
+          const imgWidth = (imageBounds ? imageBounds.width : tempImg.width);
+          const imgHeight = (imageBounds ? imageBounds.height : tempImg.height);
           
           const initialWidth = Math.min(window.screen.availWidth * 0.9, 
                                      imgWidth + initialPadding * 2);
@@ -266,28 +268,37 @@
           return true;
         }
 
-        // Convert window coordinates to image coordinates
-        const imgX = Math.floor(((x - rect.left) / rect.width) * hitTestCanvas.width);
-        const imgY = Math.floor(((y - rect.top) / rect.height) * hitTestCanvas.height);
-        
-        // Check if coordinates are within canvas bounds
-        if (
-          imgX < 0 || 
-          imgX >= hitTestCanvas.width || 
-          imgY < 0 || 
-          imgY >= hitTestCanvas.height
-        ) {
-          return true;
-        }
+        // If we're using the cropped image
+        if (imageBounds) {
+          // For cropped images, we know any visible part is non-transparent
+          // Just check if the point is within the image bounds
+          return false;
+        } else {
+          // For uncropped images, use the original transparency check
 
-        // Get pixel data (RGBA)
-        try {
-          const pixelData = ctx.getImageData(imgX, imgY, 1, 1).data;
-          // Check alpha channel (index 3) for transparency
-          return pixelData[3] === 0;
-        } catch (error) {
-          console.error('Error checking pixel transparency:', error);
-          return true; // Assume transparent on error
+          // Convert window coordinates to image coordinates
+          const imgX = Math.floor(((x - rect.left) / rect.width) * hitTestCanvas.width);
+          const imgY = Math.floor(((y - rect.top) / rect.height) * hitTestCanvas.height);
+          
+          // Check if coordinates are within canvas bounds
+          if (
+            imgX < 0 || 
+            imgX >= hitTestCanvas.width || 
+            imgY < 0 || 
+            imgY >= hitTestCanvas.height
+          ) {
+            return true;
+          }
+
+          // Get pixel data (RGBA)
+          try {
+            const pixelData = ctx.getImageData(imgX, imgY, 1, 1).data;
+            // Check alpha channel (index 3) for transparency
+            return pixelData[3] === 0;
+          } catch (error) {
+            console.error('Error checking pixel transparency:', error);
+            return true; // Assume transparent on error
+          }
         }
       }
 
@@ -334,7 +345,13 @@
             return;
           }
           
-          initialClickOnNonTransparent = !isPixelTransparent(e.clientX, e.clientY);
+          if (e.target.closest('#png-image')) {
+            // If we clicked on the image, assume it's a non-transparent area
+            // For cropped images, all visible pixels are non-transparent
+            initialClickOnNonTransparent = true;
+          } else {
+            initialClickOnNonTransparent = false;
+          }
           
           if (initialClickOnNonTransparent) {
             // Start drag if clicked on non-transparent pixel
