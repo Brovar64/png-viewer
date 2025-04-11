@@ -18,8 +18,12 @@ function createTransparentWindow(imagePath, imageId) {
     height: 600,
     transparent: true,
     frame: false,
-    resizable: false,
+    resizable: true,
     skipTaskbar: true,
+    hasShadow: false,
+    // Disable resize animation to prevent momentary jumps
+    animateAppIcon: false,
+    autoHideMenuBar: true,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -122,7 +126,6 @@ function setupTransparentWindowHandlers() {
 
   // Handle window dragging using manual positioning
   ipcMain.on('window:dragStart', (event) => {
-    // Just acknowledge the drag start
     event.returnValue = true;
   });
   
@@ -137,11 +140,11 @@ function setupTransparentWindowHandlers() {
       
       const mouseX = Number(args.mouseX);
       const mouseY = Number(args.mouseY);
-      const offsetX = Number(args.offsetX);
-      const offsetY = Number(args.offsetY);
+      const offsetX = Number(args.offsetX || 0);
+      const offsetY = Number(args.offsetY || 0);
       
       // Validate that all values are numbers
-      if (isNaN(mouseX) || isNaN(mouseY) || isNaN(offsetX) || isNaN(offsetY)) {
+      if (isNaN(mouseX) || isNaN(mouseY)) {
         console.error('Invalid coordinates in window:drag', args);
         return;
       }
@@ -150,10 +153,50 @@ function setupTransparentWindowHandlers() {
       const win = BrowserWindow.fromWebContents(webContents);
       if (!win) return;
       
-      // Set the window position based on mouse position and offset
-      win.setPosition(Math.round(mouseX - offsetX), Math.round(mouseY - offsetY));
+      // Get current position
+      const [x, y] = win.getPosition();
+      
+      // Set the window position - using the mouse position and optional offsets
+      win.setPosition(x + offsetX, y + offsetY);
     } catch (error) {
       console.error('Error in window:drag handler:', error);
+    }
+  });
+
+  // Handle window resize with combined position adjustment
+  ipcMain.on('window:resize', (event, { width, height, keepCentered = true }) => {
+    try {
+      const webContents = event.sender;
+      const win = BrowserWindow.fromWebContents(webContents);
+      if (!win) return;
+      
+      // Ensure values are numbers and have minimums
+      const newWidth = Math.max(200, Number(width) || 600);
+      const newHeight = Math.max(200, Number(height) || 600);
+      
+      // Calculate position adjustments to maintain the same center
+      if (keepCentered) {
+        // Get current position and size
+        const [x, y] = win.getPosition();
+        const [oldWidth, oldHeight] = win.getSize();
+        
+        // Calculate position deltas to maintain center point
+        const deltaX = Math.floor((newWidth - oldWidth) / 2);
+        const deltaY = Math.floor((newHeight - oldHeight) / 2);
+        
+        // Set new position and size simultaneously to prevent flicker
+        win.setBounds({
+          x: x - deltaX,
+          y: y - deltaY,
+          width: newWidth,
+          height: newHeight
+        }, true); // true = animate (but animation is disabled in window config)
+      } else {
+        // Just resize without repositioning
+        win.setSize(Math.round(newWidth), Math.round(newHeight));
+      }
+    } catch (error) {
+      console.error('Error in window:resize handler:', error);
     }
   });
 

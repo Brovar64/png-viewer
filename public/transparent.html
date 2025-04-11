@@ -10,6 +10,7 @@
         margin: 0;
         padding: 0;
         height: 100%;
+        width: 100%;
         overflow: hidden;
         background: transparent;
       }
@@ -20,22 +21,60 @@
 
       #image-container {
         position: absolute;
-        display: block;
-        height: 100%;
+        top: 0;
+        left: 0;
         width: 100%;
-        overflow: hidden;
+        height: 100%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        overflow: visible;
       }
 
       #png-image {
-        position: absolute;
+        position: relative;
         display: none;
-        margin: auto;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
         -webkit-user-drag: none;
         transform-origin: center center;
+      }
+
+      /* Add controls for better navigation */
+      .controls {
+        position: absolute;
+        bottom: 10px;
+        right: 10px;
+        display: flex;
+        gap: 5px;
+        z-index: 10;
+        opacity: 0;
+        transition: opacity 0.2s;
+      }
+
+      body:hover .controls {
+        opacity: 0.7;
+      }
+
+      .controls:hover {
+        opacity: 1 !important;
+      }
+
+      .btn {
+        background: rgba(0, 0, 0, 0.6);
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 30px;
+        height: 30px;
+        font-size: 18px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.2s;
+      }
+
+      .btn:hover {
+        background: rgba(0, 0, 0, 0.9);
       }
     </style>
   </head>
@@ -43,24 +82,33 @@
     <div id="image-container">
       <img id="png-image" alt="PNG Image" />
     </div>
+    <div class="controls">
+      <button class="btn" id="zoomIn" title="Zoom In">+</button>
+      <button class="btn" id="zoomOut" title="Zoom Out">-</button>
+      <button class="btn" id="zoomReset" title="Reset Zoom">↺</button>
+      <button class="btn" id="closeBtn" title="Close">✕</button>
+    </div>
     <canvas id="hit-test-canvas" style="display: none;"></canvas>
 
     <script>
       // Get elements
       const imageEl = document.getElementById('png-image');
+      const imageContainer = document.getElementById('image-container');
       const hitTestCanvas = document.getElementById('hit-test-canvas');
       const ctx = hitTestCanvas.getContext('2d');
+      const controls = document.querySelector('.controls');
+      const zoomInBtn = document.getElementById('zoomIn');
+      const zoomOutBtn = document.getElementById('zoomOut');
+      const zoomResetBtn = document.getElementById('zoomReset');
+      const closeBtn = document.getElementById('closeBtn');
       
       let isOverNonTransparentPixel = false;
       let imagePath = '';
       
       // For dragging
       let isDragging = false;
-      let dragStarted = false;
       let dragStartX = 0;
       let dragStartY = 0;
-      let dragOffsetX = 0;
-      let dragOffsetY = 0;
       let initialClickOnNonTransparent = false;
 
       // For zooming
@@ -84,16 +132,27 @@
           // Draw the image onto the canvas for pixel data access
           ctx.drawImage(imageEl, 0, 0);
 
-          // Apply initial scale
-          applyScale();
+          // Set initial scale
+          updateScale();
+          
+          // Set initial window size based on image dimensions
+          // IMPORTANT: We only set the window size ONCE, on initial load
+          const initialPadding = 50;
+          const initialWidth = Math.min(window.screen.availWidth * 0.9, 
+                                     imageEl.naturalWidth + initialPadding * 2);
+          const initialHeight = Math.min(window.screen.availHeight * 0.9, 
+                                      imageEl.naturalHeight + initialPadding * 2);
+          
+          // Set the window size once, then never change it
+          window.transparentWindow.resize(initialWidth, initialHeight, true);
 
-          // Initialize tracking
+          // Initialize interaction handlers
           initializeInteractions();
         };
       });
-
-      // Apply the current scale to the image
-      function applyScale() {
+      
+      // Apply the scale without changing the centered position
+      function updateScale() {
         imageEl.style.transform = `scale(${scale})`;
       }
 
@@ -139,16 +198,25 @@
       function initializeInteractions() {
         // Handle mouse move for pixel transparency detection and dragging
         document.addEventListener('mousemove', (e) => {
-          // If dragging is in progress, always move the window regardless of current pixel
+          // Skip transparency check on controls
+          if (e.target.closest('.controls')) {
+            document.body.style.cursor = 'default';
+            return;
+          }
+          
+          // If dragging is in progress, handle window movement
           if (isDragging) {
             try {
-              // Ensure all values are proper numbers
-              const screenX = Number(e.screenX);
-              const screenY = Number(e.screenY);
-              const offsetX = Number(dragOffsetX);
-              const offsetY = Number(dragOffsetY);
+              // Calculate how much the mouse has moved
+              const deltaX = e.screenX - dragStartX;
+              const deltaY = e.screenY - dragStartY;
               
-              window.transparentWindow.drag(screenX, screenY, offsetX, offsetY);
+              // Update the drag start position
+              dragStartX = e.screenX;
+              dragStartY = e.screenY;
+              
+              // Move the window
+              window.transparentWindow.drag(e.screenX, e.screenY, deltaX, deltaY);
             } catch (error) {
               console.error('Error during drag:', error);
               isDragging = false; // Stop dragging on error
@@ -165,16 +233,18 @@
 
         // Initialize window dragging
         document.addEventListener('mousedown', (e) => {
+          // Skip dragging if clicked on controls
+          if (e.target.closest('.controls')) {
+            return;
+          }
+          
           initialClickOnNonTransparent = !isPixelTransparent(e.clientX, e.clientY);
           
           if (initialClickOnNonTransparent) {
             // Start drag if clicked on non-transparent pixel
             isDragging = true;
-            
-            // Calculate and store the click offset relative to the window
-            const rect = imageEl.getBoundingClientRect();
-            dragOffsetX = e.clientX - rect.left;
-            dragOffsetY = e.clientY - rect.top;
+            dragStartX = e.screenX;
+            dragStartY = e.screenY;
             
             // Tell the main process dragging has started
             try {
@@ -211,9 +281,12 @@
 
         // Add mouse wheel event for zooming
         document.addEventListener('wheel', (e) => {
-          if (isOverNonTransparentPixel) {
+          if (isOverNonTransparentPixel || e.target.closest('#image-container')) {
             // Prevent default scrolling behavior
             e.preventDefault();
+            
+            // Store pre-zoom scale for relative positioning
+            const oldScale = scale;
             
             // Calculate new scale based on wheel direction
             if (e.deltaY < 0) {
@@ -224,10 +297,35 @@
               scale = Math.max(scale - scaleStep, minScale);
             }
             
-            // Apply the new scale
-            applyScale();
+            // Only proceed if scale actually changed
+            if (oldScale !== scale) {
+              // Apply the new scale - this will scale from the center due to transform-origin
+              updateScale();
+              
+              // NO WINDOW RESIZING - this eliminates the jumping
+            }
           }
         }, { passive: false });
+        
+        // Add button controls
+        zoomInBtn.addEventListener('click', () => {
+          scale = Math.min(scale + scaleStep, maxScale);
+          updateScale();
+        });
+        
+        zoomOutBtn.addEventListener('click', () => {
+          scale = Math.max(scale - scaleStep, minScale);
+          updateScale();
+        });
+        
+        zoomResetBtn.addEventListener('click', () => {
+          scale = 1;
+          updateScale();
+        });
+        
+        closeBtn.addEventListener('click', () => {
+          window.transparentWindow.close();
+        });
       }
     </script>
   </body>
