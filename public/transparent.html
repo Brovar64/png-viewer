@@ -17,6 +17,9 @@
 
       body {
         user-select: none;
+        border: 2px solid #ff0000;
+        box-sizing: border-box;
+        border-radius: 4px;
       }
 
       #image-container {
@@ -36,6 +39,7 @@
         display: none;
         -webkit-user-drag: none;
         transform-origin: center center;
+        border: 2px solid #ff0000;
       }
 
       /* Add controls for better navigation */
@@ -135,17 +139,6 @@
           // Set initial scale
           updateScale();
           
-          // Set initial window size based on image dimensions
-          // IMPORTANT: We only set the window size ONCE, on initial load
-          const initialPadding = 50;
-          const initialWidth = Math.min(window.screen.availWidth * 0.9, 
-                                     imageEl.naturalWidth + initialPadding * 2);
-          const initialHeight = Math.min(window.screen.availHeight * 0.9, 
-                                      imageEl.naturalHeight + initialPadding * 2);
-          
-          // Set the window size once, then never change it
-          window.transparentWindow.resize(initialWidth, initialHeight, true);
-
           // Initialize interaction handlers
           initializeInteractions();
         };
@@ -301,8 +294,6 @@
             if (oldScale !== scale) {
               // Apply the new scale - this will scale from the center due to transform-origin
               updateScale();
-              
-              // NO WINDOW RESIZING - this eliminates the jumping
             }
           }
         }, { passive: false });
