@@ -34,6 +34,7 @@ function ImageThumbnail({ image, src }) {
             src={src} 
             alt={image.name} 
             className="max-h-full max-w-full object-contain" 
+            style={{ outline: '1px solid red' }}
           />
         ) : (
           <div className="animate-pulse h-32 w-32 bg-gray-200 rounded"></div>
