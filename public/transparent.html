@@ -229,14 +229,9 @@
           updateScale();
           
           // Set initial window size based on image dimensions
-          const initialPadding = 50;
-          const imgWidth = (imageBounds ? imageBounds.width : tempImg.width);
-          const imgHeight = (imageBounds ? imageBounds.height : tempImg.height);
-          
-          const initialWidth = Math.min(window.screen.availWidth * 0.9, 
-                                     imgWidth + initialPadding * 2);
-          const initialHeight = Math.min(window.screen.availHeight * 0.9, 
-                                      imgHeight + initialPadding * 2);
+          // Use the original window size (600x600) from transparentWindow.js
+          const initialWidth = 600;
+          const initialHeight = 600;
           
           // Set the window size once, then never change it
           window.transparentWindow.resize(initialWidth, initialHeight, true);
