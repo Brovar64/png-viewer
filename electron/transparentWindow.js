@@ -11,11 +11,14 @@ const imageDataCache = new Map();
 function createTransparentWindow(imagePath, imageId) {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
   
+  // Adjust window size to be reasonable relative to screen size
+  // (4000x4000 might be too large for many displays)
+  const windowSize = Math.min(4000, Math.min(width, height) * 0.9);
+  
   // Create a new BrowserWindow with transparent background and no frame
-  // Set window size to 4000x4000 as requested
   const transparentWindow = new BrowserWindow({
-    width: 4000,
-    height: 4000,
+    width: windowSize,
+    height: windowSize,
     transparent: true,
     frame: false,
     resizable: true,
@@ -32,10 +35,13 @@ function createTransparentWindow(imagePath, imageId) {
   });
 
   // Position the window in the center of the screen
-  transparentWindow.setPosition(
-    Math.floor(width / 2 - 2000),
-    Math.floor(height / 2 - 2000)
-  );
+  const xPos = Math.floor(width / 2 - windowSize / 2);
+  const yPos = Math.floor(height / 2 - windowSize / 2);
+  
+  transparentWindow.setPosition(xPos, yPos);
+  
+  // Focus the window to ensure it's visible
+  transparentWindow.focus();
 
   // Load the transparent window HTML
   transparentWindow.loadURL(
@@ -60,6 +66,9 @@ function createTransparentWindow(imagePath, imageId) {
       imageData,
       imagePath
     });
+    
+    // Focus the window after loading to ensure it's visible
+    transparentWindow.focus();
     
     // Remove from cache after sending
     imageDataCache.delete(imageId);
@@ -170,31 +179,8 @@ function setupTransparentWindowHandlers() {
       const win = BrowserWindow.fromWebContents(webContents);
       if (!win) return;
       
-      // Ensure values are numbers and have minimums
-      const newWidth = Math.max(200, Number(width) || 600);
-      const newHeight = Math.max(200, Number(height) || 600);
-      
-      // Calculate position adjustments to maintain the same center
-      if (keepCentered) {
-        // Get current position and size
-        const [x, y] = win.getPosition();
-        const [oldWidth, oldHeight] = win.getSize();
-        
-        // Calculate position deltas to maintain center point
-        const deltaX = Math.floor((newWidth - oldWidth) / 2);
-        const deltaY = Math.floor((newHeight - oldHeight) / 2);
-        
-        // Set new position and size simultaneously to prevent flicker
-        win.setBounds({
-          x: x - deltaX,
-          y: y - deltaY,
-          width: newWidth,
-          height: newHeight
-        }, true); // true = animate (but animation is disabled in window config)
-      } else {
-        // Just resize without repositioning
-        win.setSize(Math.round(newWidth), Math.round(newHeight));
-      }
+      // We're not using this handler anymore since we're using a fixed size window
+      // But we'll keep it for compatibility
     } catch (error) {
       console.error('Error in window:resize handler:', error);
     }
