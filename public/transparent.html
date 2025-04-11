@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#000000" />
     <title>PNG Viewer - Transparent Window</title>
+    <link rel="stylesheet" href="../node_modules/openseadragon/build/openseadragon/openseadragon.min.css" />
     <style>
       html, body {
         margin: 0;
@@ -19,27 +20,22 @@
         user-select: none;
       }
 
-      #image-container {
+      #openseadragon-container {
         position: absolute;
         top: 0;
         left: 0;
         width: 100%;
         height: 100%;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        overflow: visible;
+        background: transparent !important;
       }
 
-      #png-image {
-        position: relative;
-        display: none;
-        -webkit-user-drag: none;
-        transform-origin: center center;
+      /* Override OpenSeadragon's default background */
+      .openseadragon-canvas {
+        background-color: transparent !important;
       }
 
       /* Add controls for better navigation */
-      .controls {
+      .custom-controls {
         position: absolute;
         bottom: 10px;
         right: 10px;
@@ -50,11 +46,11 @@
         transition: opacity 0.2s;
       }
 
-      body:hover .controls {
+      body:hover .custom-controls {
         opacity: 0.7;
       }
 
-      .controls:hover {
+      .custom-controls:hover {
         opacity: 1 !important;
       }
 
@@ -76,13 +72,16 @@
       .btn:hover {
         background: rgba(0, 0, 0, 0.9);
       }
+
+      /* Hide OpenSeadragon default controls - we'll use our own */
+      .navigator {
+        display: none !important;
+      }
     </style>
   </head>
   <body>
-    <div id="image-container">
-      <img id="png-image" alt="PNG Image" />
-    </div>
-    <div class="controls">
+    <div id="openseadragon-container"></div>
+    <div class="custom-controls">
       <button class="btn" id="zoomIn" title="Zoom In">+</button>
       <button class="btn" id="zoomOut" title="Zoom Out">-</button>
       <button class="btn" id="zoomReset" title="Reset Zoom">↺</button>
@@ -90,136 +89,110 @@
     </div>
     <canvas id="hit-test-canvas" style="display: none;"></canvas>
 
+    <script src="../node_modules/openseadragon/build/openseadragon/openseadragon.min.js"></script>
     <script>
-      // Get elements
-      const imageEl = document.getElementById('png-image');
-      const imageContainer = document.getElementById('image-container');
-      const hitTestCanvas = document.getElementById('hit-test-canvas');
-      const ctx = hitTestCanvas.getContext('2d');
-      const controls = document.querySelector('.controls');
-      const zoomInBtn = document.getElementById('zoomIn');
-      const zoomOutBtn = document.getElementById('zoomOut');
-      const zoomResetBtn = document.getElementById('zoomReset');
-      const closeBtn = document.getElementById('closeBtn');
-      
+      // Core variables
+      let viewer = null;
+      let imageLoaded = false;
       let isOverNonTransparentPixel = false;
       let imagePath = '';
+      let hitTestCanvas = document.getElementById('hit-test-canvas');
+      let ctx = hitTestCanvas.getContext('2d');
       
-      // For dragging
+      // For dragging window
       let isDragging = false;
       let dragStartX = 0;
       let dragStartY = 0;
       let initialClickOnNonTransparent = false;
 
-      // For zooming
-      let scale = 1;
-      const minScale = 0.1;
-      const maxScale = 10;
-      const scaleStep = 0.1;
-      
-      // Window sizing
-      let windowPadding = 50;
-      let resizeInProgress = false;
-      let imageLoaded = false;
-      let initialWindowWidth = 600;
-      let initialWindowHeight = 600;
+      // Get control elements
+      const zoomInBtn = document.getElementById('zoomIn');
+      const zoomOutBtn = document.getElementById('zoomOut');
+      const zoomResetBtn = document.getElementById('zoomReset');
+      const closeBtn = document.getElementById('closeBtn');
+
+      // OpenSeadragon configuration options for transparent image
+      const viewerOptions = {
+        id: "openseadragon-container",
+        prefixUrl: "../node_modules/openseadragon/build/openseadragon/images/",
+        showNavigator: false,
+        showNavigationControl: false, // Hide default controls
+        animationTime: 0.3,
+        blendTime: 0,
+        constrainDuringPan: true,
+        maxZoomPixelRatio: 10,
+        minZoomImageRatio: 0.1,
+        visibilityRatio: 0,
+        zoomPerScroll: 1.2,
+        springStiffness: 15,
+        preserveViewport: true,
+        debugMode: false,
+        immediateRender: true,
+        autoResize: true,
+        backgroundColor: "rgba(0,0,0,0)", // Important for transparency
+        showFullPageControl: false,
+        showHomeControl: false,
+        showZoomControl: false
+      };
+
+      // Initialize the viewer (but don't load image yet)
+      viewer = OpenSeadragon(viewerOptions);
 
       // Listen for image data from the main process
       window.transparentWindow.loadImage(({ imageData, imagePath: path }) => {
         imagePath = path;
-        imageEl.src = imageData;
-        imageEl.style.display = 'block';
         
-        // Once image is loaded, prepare hit-testing canvas
-        imageEl.onload = () => {
-          // Size canvas to match image
-          hitTestCanvas.width = imageEl.naturalWidth;
-          hitTestCanvas.height = imageEl.naturalHeight;
+        // Create a new image to get dimensions
+        const tempImage = new Image();
+        tempImage.onload = function() {
+          // Size canvas to match image for hit testing
+          hitTestCanvas.width = tempImage.width;
+          hitTestCanvas.height = tempImage.height;
           
           // Draw the image onto the canvas for pixel data access
-          ctx.drawImage(imageEl, 0, 0);
-
-          // Set initial scales
-          initialWindowWidth = window.innerWidth;
-          initialWindowHeight = window.innerHeight;
+          ctx.drawImage(tempImage, 0, 0);
           
-          // Apply initial scale
-          updateScale();
+          // Now add the image to OpenSeadragon
+          viewer.addTiledImage({
+            tileSource: {
+              type: 'image',
+              url: imageData,
+              buildPyramid: false,
+              width: tempImage.width,
+              height: tempImage.height
+            },
+            x: 0,
+            y: 0,
+            width: 1
+          });
           
-          // Mark image as loaded
+          // Mark as loaded
           imageLoaded = true;
           
-          // Update window size initially but don't resize - just measure
-          calculateWindowSize();
-
-          // Initialize tracking
+          // Initialize interactions
           initializeInteractions();
+          
+          // Resize window to fit image initially
+          const windowPadding = 50;
+          const targetWidth = Math.min(window.screen.availWidth * 0.9, tempImage.width + windowPadding * 2);
+          const targetHeight = Math.min(window.screen.availHeight * 0.9, tempImage.height + windowPadding * 2);
+          window.transparentWindow.resize(targetWidth, targetHeight, true);
         };
+        tempImage.src = imageData;
       });
       
-      // Apply the scale without changing the centered position
-      function updateScale() {
-        imageEl.style.transform = `scale(${scale})`;
-      }
-      
-      // Calculate window size without triggering resize
-      function calculateWindowSize() {
-        if (!imageLoaded) return null;
-        
-        // Calculate the scaled dimensions plus padding
-        const scaledWidth = Math.ceil(imageEl.naturalWidth * scale) + windowPadding * 2;
-        const scaledHeight = Math.ceil(imageEl.naturalHeight * scale) + windowPadding * 2;
-        
-        // Set window size (with bounds checking for very large images)
-        const maxWidth = window.screen.availWidth * 0.9;
-        const maxHeight = window.screen.availHeight * 0.9;
-        
-        const targetWidth = Math.min(maxWidth, Math.max(300, scaledWidth));
-        const targetHeight = Math.min(maxHeight, Math.max(300, scaledHeight));
-        
-        return { width: targetWidth, height: targetHeight };
-      }
-      
-      // Update window size based on current image dimensions and scale
-      function updateWindowSize() {
-        if (resizeInProgress) return;
-        
-        const newSize = calculateWindowSize();
-        if (!newSize) return;
-        
-        // Only resize if the size has meaningfully changed to avoid unnecessary recentering
-        if (Math.abs(window.innerWidth - newSize.width) > 20 || 
-            Math.abs(window.innerHeight - newSize.height) > 20) {
-          
-          resizeInProgress = true;
-          
-          // This uses the improved function that sets size and position atomically
-          window.transparentWindow.resize(newSize.width, newSize.height, true);
-          
-          // Reset flag after a delay to avoid multiple fast resizes
-          setTimeout(() => {
-            resizeInProgress = false;
-          }, 200);
-        }
-      }
-
       // Check if a pixel at the given coordinates is transparent
       function isPixelTransparent(x, y) {
-        const rect = imageEl.getBoundingClientRect();
+        // Get image position in viewport
+        const viewer_bounds = viewer.viewport.getBounds();
+        const container_size = viewer.viewport.getContainerSize();
         
-        // Check if coordinates are outside image bounds
-        if (
-          x < rect.left ||
-          x > rect.right ||
-          y < rect.top ||
-          y > rect.bottom
-        ) {
-          return true;
-        }
-
         // Convert window coordinates to image coordinates
-        const imgX = Math.floor(((x - rect.left) / rect.width) * hitTestCanvas.width);
-        const imgY = Math.floor(((y - rect.top) / rect.height) * hitTestCanvas.height);
+        const image_point = viewer.viewport.windowToImageCoordinates(new OpenSeadragon.Point(x, y));
+        
+        // Round to integer pixel values
+        const imgX = Math.floor(image_point.x);
+        const imgY = Math.floor(image_point.y);
         
         // Check if coordinates are within canvas bounds
         if (
@@ -246,7 +219,7 @@
         // Handle mouse move for pixel transparency detection and dragging
         document.addEventListener('mousemove', (e) => {
           // Skip transparency check on controls
-          if (e.target.closest('.controls')) {
+          if (e.target.closest('.custom-controls')) {
             document.body.style.cursor = 'default';
             return;
           }
@@ -280,8 +253,9 @@
 
         // Initialize window dragging
         document.addEventListener('mousedown', (e) => {
-          // Skip dragging if clicked on controls
-          if (e.target.closest('.controls')) {
+          // Skip if we're clicking on OpenSeadragon controls or our custom controls
+          if (e.target.closest('.custom-controls') || 
+              e.target.closest('.openseadragon-canvas')) {
             return;
           }
           
@@ -319,65 +293,56 @@
           initialClickOnNonTransparent = false;
         });
         
-        // Listen for key press to close window (only when over non-transparent pixels)
+        // Listen for key press to close window
         document.addEventListener('keydown', (e) => {
           if (e.key.toLowerCase() === 'w' && isOverNonTransparentPixel) {
             window.transparentWindow.close();
           }
         });
-
-        // Add mouse wheel event for zooming
-        document.addEventListener('wheel', (e) => {
-          if (isOverNonTransparentPixel || e.target.closest('#image-container')) {
-            // Prevent default scrolling behavior
-            e.preventDefault();
-            
-            // Store pre-zoom scale for relative positioning
-            const oldScale = scale;
-            
-            // Calculate new scale based on wheel direction
-            if (e.deltaY < 0) {
-              // Scroll up - zoom in
-              scale = Math.min(scale + scaleStep, maxScale);
-            } else {
-              // Scroll down - zoom out
-              scale = Math.max(scale - scaleStep, minScale);
-            }
-            
-            // Only proceed if scale actually changed
-            if (oldScale !== scale) {
-              // Apply the new scale - this will scale from the center due to transform-origin
-              updateScale();
-              
-              // Update window size when scale changes - but don't do it if already in progress
-              if (!resizeInProgress) {
-                updateWindowSize();
-              }
-            }
-          }
-        }, { passive: false });
         
-        // Add button controls
+        // Connect our custom controls to OpenSeadragon
         zoomInBtn.addEventListener('click', () => {
-          scale = Math.min(scale + scaleStep, maxScale);
-          updateScale();
-          updateWindowSize();
+          viewer.viewport.zoomBy(1.2);
         });
         
         zoomOutBtn.addEventListener('click', () => {
-          scale = Math.max(scale - scaleStep, minScale);
-          updateScale();
-          updateWindowSize();
+          viewer.viewport.zoomBy(0.8);
         });
         
         zoomResetBtn.addEventListener('click', () => {
-          scale = 1;
-          updateScale();
-          updateWindowSize();
+          viewer.viewport.goHome();
         });
         
         closeBtn.addEventListener('click', () => {
           window.transparentWindow.close();
+        });
+        
+        // Handle viewport changes to update window size
+        viewer.addHandler('animation', () => {
+          // Skip resizing during animation for smoother transitions
+        });
+        
+        viewer.addHandler('animation-finish', () => {
+          // After animation completes, check if we need to resize
+          const zoom = viewer.viewport.getZoom();
+          if (zoom > 1) {
+            // Get the image bounds
+            const bounds = viewer.viewport.getBounds();
+            const containerSize = viewer.viewport.getContainerSize();
+            
+            // Calculate viewport size in image pixels
+            const viewportWidth = containerSize.x * zoom;
+            const viewportHeight = containerSize.y * zoom;
+            
+            // Only resize if needed
+            if (viewportWidth > window.innerWidth || viewportHeight > window.innerHeight) {
+              const padding = 50;
+              const targetWidth = Math.min(window.screen.availWidth * 0.9, viewportWidth + padding * 2);
+              const targetHeight = Math.min(window.screen.availHeight * 0.9, viewportHeight + padding * 2);
+              
+              window.transparentWindow.resize(targetWidth, targetHeight, true);
+            }
+          }
         });
       }
     </script>
