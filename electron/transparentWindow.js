@@ -129,7 +129,7 @@ function setupTransparentWindowHandlers() {
     event.returnValue = true;
   });
   
-  // Improved drag handler with more defensive checks and type coercion
+  // Improved drag handler to prevent size changes during dragging
   ipcMain.on('window:drag', (event, args) => {
     try {
       // Safety checks and number conversion
@@ -153,13 +153,43 @@ function setupTransparentWindowHandlers() {
       const win = BrowserWindow.fromWebContents(webContents);
       if (!win) return;
       
+      // Get current position and size
+      const [x, y] = win.getPosition();
+      const currentSize = win.getSize();
+      
+      // Set the window position explicitly
+      win.setPosition(x + offsetX, y + offsetY);
+      
+      // Force the size to remain constant - this is critical to prevent size creep
+      win.setSize(currentSize[0], currentSize[1]);
+    } catch (error) {
+      console.error('Error in window:drag handler:', error);
+    }
+  });
+
+  // New handler for explicit size reset (used to prevent size creep during dragging)
+  ipcMain.on('window:resetSize', (event, { width, height }) => {
+    try {
+      const webContents = event.sender;
+      const win = BrowserWindow.fromWebContents(webContents);
+      if (!win) return;
+      
+      // Ensure values are numbers and have minimums
+      const newWidth = Math.max(200, Number(width) || 600);
+      const newHeight = Math.max(200, Number(height) || 600);
+      
       // Get current position
       const [x, y] = win.getPosition();
       
-      // Set the window position - using the mouse position and optional offsets
-      win.setPosition(x + offsetX, y + offsetY);
+      // Force an exact size with setBounds (no animation)
+      win.setBounds({
+        x: x,
+        y: y,
+        width: newWidth,
+        height: newHeight
+      }, false); // false = no animation
     } catch (error) {
-      console.error('Error in window:drag handler:', error);
+      console.error('Error in window:resetSize handler:', error);
     }
   });
 
