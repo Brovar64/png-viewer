@@ -125,6 +125,10 @@
       const maxScale = 10;
       const scaleStep = 0.1;
       
+      // Window dimensions - match those in transparentWindow.js
+      const WINDOW_WIDTH = 600;
+      const WINDOW_HEIGHT = 600;
+      
       // Flag to track if we've already set the window size
       let windowSizeInitialized = false;
 
@@ -233,12 +237,8 @@
           
           // Set window size only once on initial load
           if (!windowSizeInitialized) {
-            // Use the original window size (600x600) from transparentWindow.js
-            const initialWidth = 600;
-            const initialHeight = 600;
-            
-            // Set the window size once, then never change it
-            window.transparentWindow.resize(initialWidth, initialHeight, true);
+            // Set the window size exactly once at startup, never again
+            window.transparentWindow.resize(WINDOW_WIDTH, WINDOW_HEIGHT, false);
             windowSizeInitialized = true;
           }
           
