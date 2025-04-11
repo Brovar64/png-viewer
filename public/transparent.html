@@ -17,6 +17,9 @@
 
       body {
         user-select: none;
+        border: 2px solid #ff0000;
+        box-sizing: border-box;
+        border-radius: 4px;
       }
 
       #image-container {
@@ -36,6 +39,7 @@
         display: none;
         -webkit-user-drag: none;
         transform-origin: center center;
+        border: 2px solid #ff0000;
       }
 
       /* Add controls for better navigation */
@@ -89,13 +93,16 @@
       <button class="btn" id="closeBtn" title="Close">✕</button>
     </div>
     <canvas id="hit-test-canvas" style="display: none;"></canvas>
+    <canvas id="crop-canvas" style="display: none;"></canvas>
 
     <script>
       // Get elements
       const imageEl = document.getElementById('png-image');
       const imageContainer = document.getElementById('image-container');
       const hitTestCanvas = document.getElementById('hit-test-canvas');
+      const cropCanvas = document.getElementById('crop-canvas');
       const ctx = hitTestCanvas.getContext('2d');
+      const cropCtx = cropCanvas.getContext('2d');
       const controls = document.querySelector('.controls');
       const zoomInBtn = document.getElementById('zoomIn');
       const zoomOutBtn = document.getElementById('zoomOut');
@@ -104,6 +111,7 @@
       
       let isOverNonTransparentPixel = false;
       let imagePath = '';
+      let imageBounds = null;
       
       // For dragging
       let isDragging = false;
@@ -116,39 +124,130 @@
       const minScale = 0.1;
       const maxScale = 10;
       const scaleStep = 0.1;
+      
+      // Window dimensions - match those in transparentWindow.js
+      const WINDOW_WIDTH = 600;
+      const WINDOW_HEIGHT = 600;
+      
+      // Flag to track if we've already set the window size
+      let windowSizeInitialized = false;
+
+      // Function to find non-transparent edges of an image
+      function findNonTransparentBounds(ctx, width, height) {
+        let left = width;
+        let right = 0;
+        let top = height;
+        let bottom = 0;
+        
+        const imageData = ctx.getImageData(0, 0, width, height);
+        const data = imageData.data;
+        
+        // Scan through the entire image data
+        for (let y = 0; y < height; y++) {
+          for (let x = 0; x < width; x++) {
+            const alpha = data[((y * width + x) * 4) + 3];
+            
+            if (alpha > 0) {
+              left = Math.min(left, x);
+              right = Math.max(right, x);
+              top = Math.min(top, y);
+              bottom = Math.max(bottom, y);
+            }
+          }
+        }
+        
+        // Add a small padding to avoid clipping the image too tightly
+        const padding = 1;
+        left = Math.max(0, left - padding);
+        top = Math.max(0, top - padding);
+        right = Math.min(width - 1, right + padding);
+        bottom = Math.min(height - 1, bottom + padding);
+        
+        // If no visible pixels are found, return null
+        if (left > right || top > bottom) {
+          return null;
+        }
+        
+        return {
+          left,
+          top,
+          right,
+          bottom,
+          width: right - left + 1,
+          height: bottom - top + 1
+        };
+      }
+
+      // Function to crop an image to its non-transparent content
+      function cropToContent(sourceCanvas, bounds) {
+        if (!bounds) return null;
+        
+        // Set crop canvas dimensions
+        cropCanvas.width = bounds.width;
+        cropCanvas.height = bounds.height;
+        
+        // Draw the cropped portion of the image onto the crop canvas
+        cropCtx.drawImage(
+          sourceCanvas,
+          bounds.left, bounds.top, bounds.width, bounds.height,
+          0, 0, bounds.width, bounds.height
+        );
+        
+        return cropCanvas.toDataURL('image/png');
+      }
 
       // Listen for image data from the main process
       window.transparentWindow.loadImage(({ imageData, imagePath: path }) => {
         imagePath = path;
-        imageEl.src = imageData;
-        imageEl.style.display = 'block';
         
-        // Once image is loaded, prepare hit-testing canvas
-        imageEl.onload = () => {
+        // Load image into temporary image element to get dimensions
+        const tempImg = new Image();
+        tempImg.onload = () => {
           // Size canvas to match image
-          hitTestCanvas.width = imageEl.naturalWidth;
-          hitTestCanvas.height = imageEl.naturalHeight;
+          hitTestCanvas.width = tempImg.width;
+          hitTestCanvas.height = tempImg.height;
           
           // Draw the image onto the canvas for pixel data access
-          ctx.drawImage(imageEl, 0, 0);
-
+          ctx.drawImage(tempImg, 0, 0);
+          
+          // Find non-transparent bounds
+          imageBounds = findNonTransparentBounds(ctx, tempImg.width, tempImg.height);
+          
+          if (imageBounds) {
+            // Crop the image to content
+            const croppedImageData = cropToContent(hitTestCanvas, imageBounds);
+            
+            // Set the cropped image
+            if (croppedImageData) {
+              imageEl.src = croppedImageData;
+            } else {
+              // Fallback to original if cropping failed
+              imageEl.src = imageData;
+              imageBounds = null;
+            }
+          } else {
+            // No non-transparent pixels found, use original
+            imageEl.src = imageData;
+          }
+          
+          imageEl.style.display = 'block';
+          
           // Set initial scale
           updateScale();
           
-          // Set initial window size based on image dimensions
-          // IMPORTANT: We only set the window size ONCE, on initial load
-          const initialPadding = 50;
-          const initialWidth = Math.min(window.screen.availWidth * 0.9, 
-                                     imageEl.naturalWidth + initialPadding * 2);
-          const initialHeight = Math.min(window.screen.availHeight * 0.9, 
-                                      imageEl.naturalHeight + initialPadding * 2);
+          // Set window size only once on initial load
+          if (!windowSizeInitialized) {
+            // Set the window size exactly once at startup, never again
+            window.transparentWindow.resize(WINDOW_WIDTH, WINDOW_HEIGHT, false);
+            windowSizeInitialized = true;
+          }
           
-          // Set the window size once, then never change it
-          window.transparentWindow.resize(initialWidth, initialHeight, true);
-
           // Initialize interaction handlers
           initializeInteractions();
         };
+        
+        // Set the source to the original image data to load it
+        tempImg.src = imageData;
       });
       
       // Apply the scale without changing the centered position
@@ -170,28 +269,37 @@
           return true;
         }
 
-        // Convert window coordinates to image coordinates
-        const imgX = Math.floor(((x - rect.left) / rect.width) * hitTestCanvas.width);
-        const imgY = Math.floor(((y - rect.top) / rect.height) * hitTestCanvas.height);
-        
-        // Check if coordinates are within canvas bounds
-        if (
-          imgX < 0 || 
-          imgX >= hitTestCanvas.width || 
-          imgY < 0 || 
-          imgY >= hitTestCanvas.height
-        ) {
-          return true;
-        }
+        // If we're using the cropped image
+        if (imageBounds) {
+          // For cropped images, we know any visible part is non-transparent
+          // Just check if the point is within the image bounds
+          return false;
+        } else {
+          // For uncropped images, use the original transparency check
 
-        // Get pixel data (RGBA)
-        try {
-          const pixelData = ctx.getImageData(imgX, imgY, 1, 1).data;
-          // Check alpha channel (index 3) for transparency
-          return pixelData[3] === 0;
-        } catch (error) {
-          console.error('Error checking pixel transparency:', error);
-          return true; // Assume transparent on error
+          // Convert window coordinates to image coordinates
+          const imgX = Math.floor(((x - rect.left) / rect.width) * hitTestCanvas.width);
+          const imgY = Math.floor(((y - rect.top) / rect.height) * hitTestCanvas.height);
+          
+          // Check if coordinates are within canvas bounds
+          if (
+            imgX < 0 || 
+            imgX >= hitTestCanvas.width || 
+            imgY < 0 || 
+            imgY >= hitTestCanvas.height
+          ) {
+            return true;
+          }
+
+          // Get pixel data (RGBA)
+          try {
+            const pixelData = ctx.getImageData(imgX, imgY, 1, 1).data;
+            // Check alpha channel (index 3) for transparency
+            return pixelData[3] === 0;
+          } catch (error) {
+            console.error('Error checking pixel transparency:', error);
+            return true; // Assume transparent on error
+          }
         }
       }
 
@@ -238,7 +346,13 @@
             return;
           }
           
-          initialClickOnNonTransparent = !isPixelTransparent(e.clientX, e.clientY);
+          if (e.target.closest('#png-image')) {
+            // If we clicked on the image, assume it's a non-transparent area
+            // For cropped images, all visible pixels are non-transparent
+            initialClickOnNonTransparent = true;
+          } else {
+            initialClickOnNonTransparent = false;
+          }
           
           if (initialClickOnNonTransparent) {
             // Start drag if clicked on non-transparent pixel
@@ -301,8 +415,6 @@
             if (oldScale !== scale) {
               // Apply the new scale - this will scale from the center due to transform-origin
               updateScale();
-              
-              // NO WINDOW RESIZING - this eliminates the jumping
             }
           }
         }, { passive: false });
