@@ -36,6 +36,7 @@
         display: none;
         -webkit-user-drag: none;
         transform-origin: center center;
+        outline: 1px solid red;
       }
 
       /* Add controls for better navigation */
@@ -125,11 +126,49 @@
       const maxScale = 10;
       const scaleStep = 0.1;
 
+      // For cropping transparency
+      let boundingRect = null;
+
+      // Find the bounding box of non-transparent pixels
+      function findBoundingBox(imageData) {
+        const { width, height, data } = imageData;
+        let minX = width;
+        let minY = height;
+        let maxX = 0;
+        let maxY = 0;
+        let hasNonTransparentPixels = false;
+
+        // Loop through all pixels
+        for (let y = 0; y < height; y++) {
+          for (let x = 0; x < width; x++) {
+            const idx = (y * width + x) * 4;
+            // Check alpha value (non-transparent)
+            if (data[idx + 3] > 0) {
+              minX = Math.min(minX, x);
+              minY = Math.min(minY, y);
+              maxX = Math.max(maxX, x);
+              maxY = Math.max(maxY, y);
+              hasNonTransparentPixels = true;
+            }
+          }
+        }
+
+        return hasNonTransparentPixels ? {
+          x: minX,
+          y: minY,
+          width: maxX - minX + 1,
+          height: maxY - minY + 1
+        } : null;
+      }
+
       // Listen for image data from the main process
-      window.transparentWindow.loadImage(({ imageData, imagePath: path }) => {
+      window.transparentWindow.loadImage(({ imageData, imagePath: path, boundingBox }) => {
         imagePath = path;
         imageEl.src = imageData;
         imageEl.style.display = 'block';
+        
+        // Store the bounding box if provided from main process
+        boundingRect = boundingBox;
         
         // Once image is loaded, prepare hit-testing canvas
         imageEl.onload = () => {
@@ -139,24 +178,45 @@
           
           // Draw the image onto the canvas for pixel data access
           ctx.drawImage(imageEl, 0, 0);
+          
+          // Find bounding box if not provided
+          if (!boundingRect) {
+            const imgData = ctx.getImageData(0, 0, hitTestCanvas.width, hitTestCanvas.height);
+            boundingRect = findBoundingBox(imgData);
+            
+            // If no non-transparent pixels were found, use the whole image
+            if (!boundingRect) {
+              boundingRect = {
+                x: 0,
+                y: 0,
+                width: hitTestCanvas.width,
+                height: hitTestCanvas.height
+              };
+            }
+          }
 
           // Set initial scale
           updateScale();
           
-          // Set initial window size based on image dimensions
-          // IMPORTANT: We only set the window size ONCE, on initial load
-          const initialPadding = 50;
-          const initialWidth = Math.min(window.screen.availWidth * 0.9, 
-                                     imageEl.naturalWidth + initialPadding * 2);
-          const initialHeight = Math.min(window.screen.availHeight * 0.9, 
-                                      imageEl.naturalHeight + initialPadding * 2);
+          // Set initial window size based on bounding rectangle with padding
+          const padding = 20; // Padding around the non-transparent content
+          
+          // Calculate window dimensions based on the non-transparent content
+          const windowWidth = Math.min(
+            window.screen.availWidth * 0.9,
+            boundingRect.width + padding * 2
+          );
+          const windowHeight = Math.min(
+            window.screen.availHeight * 0.9,
+            boundingRect.height + padding * 2
+          );
           
           // Store original window size for drag reset
-          originalWindowWidth = initialWidth;
-          originalWindowHeight = initialHeight;
+          originalWindowWidth = windowWidth;
+          originalWindowHeight = windowHeight;
           
           // Set the window size once, then never change it
-          window.transparentWindow.resize(initialWidth, initialHeight, true);
+          window.transparentWindow.resize(windowWidth, windowHeight, true);
 
           // Initialize interaction handlers
           initializeInteractions();
