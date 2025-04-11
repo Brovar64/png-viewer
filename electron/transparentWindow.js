@@ -11,19 +11,20 @@ const imageDataCache = new Map();
 function createTransparentWindow(imagePath, imageId) {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
   
-  // Adjust window size to be reasonable relative to screen size
-  // (4000x4000 might be too large for many displays)
-  const windowSize = Math.min(4000, Math.min(width, height) * 0.9);
+  // Fixed size: 4000x4000 as requested
+  const windowWidth = 4000;
+  const windowHeight = 4000;
   
   // Create a new BrowserWindow with transparent background and no frame
   const transparentWindow = new BrowserWindow({
-    width: windowSize,
-    height: windowSize,
+    width: windowWidth,
+    height: windowHeight,
     transparent: true,
     frame: false,
-    resizable: true,
+    resizable: false,
     skipTaskbar: true,
     hasShadow: false,
+    show: false, // Don't show until properly positioned
     // Disable resize animation to prevent momentary jumps
     animateAppIcon: false,
     autoHideMenuBar: true,
@@ -34,15 +35,16 @@ function createTransparentWindow(imagePath, imageId) {
     }
   });
 
-  // Position the window in the center of the screen
-  const xPos = Math.floor(width / 2 - windowSize / 2);
-  const yPos = Math.floor(height / 2 - windowSize / 2);
+  // Calculate center position
+  const xPos = Math.floor(width / 2 - windowWidth / 2);
+  const yPos = Math.floor(height / 2 - windowHeight / 2);
   
-  transparentWindow.setPosition(xPos, yPos);
+  // Position window - ensure it's at least partially on screen
+  transparentWindow.setPosition(
+    Math.max(xPos, -windowWidth + 100), // Ensure at least 100px is visible
+    Math.max(yPos, -windowHeight + 100)
+  );
   
-  // Focus the window to ensure it's visible
-  transparentWindow.focus();
-
   // Load the transparent window HTML
   transparentWindow.loadURL(
     isDev
@@ -67,7 +69,8 @@ function createTransparentWindow(imagePath, imageId) {
       imagePath
     });
     
-    // Focus the window after loading to ensure it's visible
+    // Show and focus window after content is ready
+    transparentWindow.show();
     transparentWindow.focus();
     
     // Remove from cache after sending
@@ -174,16 +177,7 @@ function setupTransparentWindowHandlers() {
 
   // Handle window resize with combined position adjustment
   ipcMain.on('window:resize', (event, { width, height, keepCentered = true }) => {
-    try {
-      const webContents = event.sender;
-      const win = BrowserWindow.fromWebContents(webContents);
-      if (!win) return;
-      
-      // We're not using this handler anymore since we're using a fixed size window
-      // But we'll keep it for compatibility
-    } catch (error) {
-      console.error('Error in window:resize handler:', error);
-    }
+    // Intentionally left empty - we don't resize the window anymore
   });
 
   // Handle window close
