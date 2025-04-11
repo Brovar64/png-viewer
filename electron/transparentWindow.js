@@ -2,20 +2,83 @@ const { BrowserWindow, ipcMain, screen } = require('electron');
 const path = require('path');
 const isDev = require('electron-is-dev');
 const fs = require('fs');
+const { createCanvas, loadImage } = require('canvas');
 
 let transparentWindows = new Map();
 
 // Store image data temporarily
 const imageDataCache = new Map();
 
-function createTransparentWindow(imagePath, imageId) {
+// Find the bounding box of non-transparent pixels in the image
+async function findBoundingBox(imagePath) {
+  try {
+    // Load the image
+    const img = await loadImage(imagePath);
+    
+    // Create a canvas with the image dimensions
+    const canvas = createCanvas(img.width, img.height);
+    const ctx = canvas.getContext('2d');
+    
+    // Draw the image on the canvas
+    ctx.drawImage(img, 0, 0);
+    
+    // Get the image data
+    const imageData = ctx.getImageData(0, 0, img.width, img.height);
+    const { data, width, height } = imageData;
+    
+    // Find the boundaries of non-transparent pixels
+    let minX = width;
+    let minY = height;
+    let maxX = 0;
+    let maxY = 0;
+    let hasNonTransparentPixels = false;
+    
+    // Loop through all pixels to find non-transparent ones
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const idx = (y * width + x) * 4;
+        // Check alpha value (non-transparent)
+        if (data[idx + 3] > 0) {
+          minX = Math.min(minX, x);
+          minY = Math.min(minY, y);
+          maxX = Math.max(maxX, x);
+          maxY = Math.max(maxY, y);
+          hasNonTransparentPixels = true;
+        }
+      }
+    }
+    
+    return hasNonTransparentPixels ? {
+      x: minX,
+      y: minY,
+      width: maxX - minX + 1,
+      height: maxY - minY + 1
+    } : null;
+  } catch (error) {
+    console.error('Error finding bounding box:', error);
+    return null;
+  }
+}
+
+function createTransparentWindow(imagePath, imageId, boundingBox) {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
   
+  // Calculate window dimensions based on the bounding box with padding
+  const padding = 20; // Padding around the non-transparent content
+  
+  // Use bounding box dimensions if available, otherwise use defaults
+  const windowWidth = boundingBox 
+    ? Math.min(window.screen.availWidth * 0.9, boundingBox.width + padding * 2) 
+    : 600;
+  const windowHeight = boundingBox 
+    ? Math.min(window.screen.availHeight * 0.9, boundingBox.height + padding * 2) 
+    : 600;
+  
   // Create a new BrowserWindow with transparent background and no frame
-  // Using larger default size for better zooming experience
+  // Using calculated size for better zooming experience
   const transparentWindow = new BrowserWindow({
-    width: 600,
-    height: 600,
+    width: windowWidth,
+    height: windowHeight,
     transparent: true,
     frame: false,
     resizable: true,
@@ -31,10 +94,13 @@ function createTransparentWindow(imagePath, imageId) {
     }
   });
 
+  // Add red outline to the window
+  transparentWindow.setBackgroundColor('#FF000000'); // Transparent background with red tint
+  
   // Position the window in the center of the screen
   transparentWindow.setPosition(
-    Math.floor(width / 2 - 300),
-    Math.floor(height / 2 - 300)
+    Math.floor(width / 2 - windowWidth / 2),
+    Math.floor(height / 2 - windowHeight / 2)
   );
 
   // Load the transparent window HTML
@@ -58,7 +124,8 @@ function createTransparentWindow(imagePath, imageId) {
     
     transparentWindow.webContents.send('load-image', {
       imageData,
-      imagePath
+      imagePath,
+      boundingBox
     });
     
     // Remove from cache after sending
@@ -89,8 +156,11 @@ function setupTransparentWindowHandlers() {
       // Store the image data in cache
       imageDataCache.set(imageId, imageData);
       
+      // Find the bounding box of non-transparent pixels
+      const boundingBox = await findBoundingBox(imagePath);
+      
       // Create the window with a reference to the cached data
-      createTransparentWindow(imagePath, imageId);
+      createTransparentWindow(imagePath, imageId, boundingBox);
       return { success: true };
     } catch (error) {
       console.error('Error creating transparent window:', error);
@@ -112,11 +182,14 @@ function setupTransparentWindowHandlers() {
       const imageId = Date.now().toString();
       const base64Data = `data:image/png;base64,${data.toString('base64')}`;
       
+      // Find the bounding box of non-transparent pixels
+      const boundingBox = await findBoundingBox(imagePath);
+      
       // Store the image data in cache
       imageDataCache.set(imageId, base64Data);
       
       // Create window
-      createTransparentWindow(imagePath, imageId);
+      createTransparentWindow(imagePath, imageId, boundingBox);
       return { success: true };
     } catch (error) {
       console.error('Error creating transparent window:', error);
