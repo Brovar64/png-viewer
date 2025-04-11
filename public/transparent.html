@@ -20,21 +20,18 @@
 
       #image-container {
         position: absolute;
-        height: 100%;
-        width: 100%;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        overflow: visible;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        overflow: hidden;
       }
 
       #png-image {
-        position: relative;
+        position: absolute;
         display: none;
-        max-height: 100%;
-        max-width: 100%;
         -webkit-user-drag: none;
-        transform-origin: center;
+        transform-origin: center center;
       }
 
       /* Add controls for better navigation */
@@ -108,8 +105,6 @@
       let isDragging = false;
       let dragStartX = 0;
       let dragStartY = 0;
-      let dragOffsetX = 0;
-      let dragOffsetY = 0;
       let initialClickOnNonTransparent = false;
 
       // For zooming
@@ -118,8 +113,9 @@
       const maxScale = 10;
       const scaleStep = 0.1;
       
-      // Viewport tracking
-      let viewportCenter = { x: 0, y: 0 };
+      // Image positioning
+      let imageX = 0;
+      let imageY = 0;
       
       // Window dimensions
       let windowPadding = 50; // Padding to add around the image
@@ -140,34 +136,27 @@
           // Draw the image onto the canvas for pixel data access
           ctx.drawImage(imageEl, 0, 0);
 
-          // Apply initial scale
-          applyScale();
-
+          // Initialize image position
+          centerImage();
+          
           // Initialize window dimensions based on image size
           updateWindowSize();
 
           // Initialize tracking
           initializeInteractions();
-          
-          // Store initial viewport center
-          updateViewportCenter();
         };
       });
-
-      // Track the center point of the viewport for consistent scaling
-      function updateViewportCenter() {
-        viewportCenter = {
-          x: window.innerWidth / 2,
-          y: window.innerHeight / 2
-        };
+      
+      // Center the image in the window
+      function centerImage() {
+        imageX = (window.innerWidth - imageEl.naturalWidth) / 2;
+        imageY = (window.innerHeight - imageEl.naturalHeight) / 2;
+        updateImagePosition();
       }
       
-      // Apply the current scale to the image
-      function applyScale() {
-        imageEl.style.transform = `scale(${scale})`;
-        
-        // Update window size when scale changes
-        updateWindowSize();
+      // Update the image's position on screen
+      function updateImagePosition() {
+        imageEl.style.transform = `translate(${imageX}px, ${imageY}px) scale(${scale})`;
       }
       
       // Update window size based on current image dimensions and scale
@@ -181,21 +170,38 @@
         
         // Set a timeout to avoid too many resize operations
         resizeTimeout = setTimeout(() => {
-          // Calculate the scaled dimensions plus padding
-          const scaledWidth = Math.ceil(imageEl.naturalWidth * scale) + windowPadding * 2;
-          const scaledHeight = Math.ceil(imageEl.naturalHeight * scale) + windowPadding * 2;
+          // Calculate the needed size based on the image dimensions and current position
+          const boundsLeft = Math.min(0, imageX);
+          const boundsRight = Math.max(window.innerWidth, imageX + imageEl.naturalWidth * scale);
+          const boundsTop = Math.min(0, imageY);
+          const boundsBottom = Math.max(window.innerHeight, imageY + imageEl.naturalHeight * scale);
           
-          // Set window size (with bounds checking for very large images)
+          // Add padding
+          const newWidth = boundsRight - boundsLeft + windowPadding * 2;
+          const newHeight = boundsBottom - boundsTop + windowPadding * 2;
+          
+          // Set bounds for very large or small windows
           const maxWidth = window.screen.availWidth * 0.9;
           const maxHeight = window.screen.availHeight * 0.9;
+          const minWidth = 300;
+          const minHeight = 300;
           
-          const targetWidth = Math.min(maxWidth, Math.max(300, scaledWidth));
-          const targetHeight = Math.min(maxHeight, Math.max(300, scaledHeight));
+          const targetWidth = Math.min(maxWidth, Math.max(minWidth, newWidth));
+          const targetHeight = Math.min(maxHeight, Math.max(minHeight, newHeight));
           
-          // Only resize if the size has meaningfully changed
+          // Only resize if dimensions have changed significantly
           if (Math.abs(window.innerWidth - targetWidth) > 10 || 
               Math.abs(window.innerHeight - targetHeight) > 10) {
+            
+            // Calculate position offset to maintain visible portion
+            const oldCenterX = window.innerWidth / 2;
+            const oldCenterY = window.innerHeight / 2;
+            
+            // Resize the window
             window.transparentWindow.resize(targetWidth, targetHeight);
+            
+            // After resize, we'll need to adjust the image position
+            // This happens in the resize event handler
           }
           
           resizeTimeout = null;
@@ -204,6 +210,7 @@
 
       // Check if a pixel at the given coordinates is transparent
       function isPixelTransparent(x, y) {
+        // Convert window coordinates to image coordinates
         const rect = imageEl.getBoundingClientRect();
         
         // Check if coordinates are outside image bounds
@@ -216,9 +223,9 @@
           return true;
         }
 
-        // Convert window coordinates to image coordinates
-        const imgX = Math.floor(((x - rect.left) / (rect.width)) * hitTestCanvas.width);
-        const imgY = Math.floor(((y - rect.top) / (rect.height)) * hitTestCanvas.height);
+        // Calculate the exact pixel coordinates in the original image
+        const imgX = Math.floor(((x - rect.left) / rect.width) * hitTestCanvas.width);
+        const imgY = Math.floor(((y - rect.top) / rect.height) * hitTestCanvas.height);
         
         // Check if coordinates are within canvas bounds
         if (
@@ -250,20 +257,21 @@
             return;
           }
           
-          // If dragging is in progress, always move the window regardless of current pixel
+          // If dragging is in progress
           if (isDragging) {
-            try {
-              // Ensure all values are proper numbers
-              const screenX = Number(e.screenX);
-              const screenY = Number(e.screenY);
-              const offsetX = Number(dragOffsetX);
-              const offsetY = Number(dragOffsetY);
-              
-              window.transparentWindow.drag(screenX, screenY, offsetX, offsetY);
-            } catch (error) {
-              console.error('Error during drag:', error);
-              isDragging = false; // Stop dragging on error
-            }
+            // Move the image with the mouse
+            const deltaX = e.clientX - dragStartX;
+            const deltaY = e.clientY - dragStartY;
+            
+            imageX += deltaX;
+            imageY += deltaY;
+            
+            // Update drag start position for next move
+            dragStartX = e.clientX;
+            dragStartY = e.clientY;
+            
+            // Apply the new position
+            updateImagePosition();
             return;
           }
           
@@ -274,7 +282,7 @@
           document.body.style.cursor = isOverNonTransparentPixel ? 'move' : 'default';
         });
 
-        // Initialize window dragging
+        // Initialize image dragging
         document.addEventListener('mousedown', (e) => {
           // Skip dragging if clicked on controls
           if (e.target.closest('.controls')) {
@@ -286,18 +294,8 @@
           if (initialClickOnNonTransparent) {
             // Start drag if clicked on non-transparent pixel
             isDragging = true;
-            
-            // Calculate and store the click offset relative to the window
-            dragOffsetX = e.clientX;
-            dragOffsetY = e.clientY;
-            
-            // Tell the main process dragging has started
-            try {
-              window.transparentWindow.startDrag();
-            } catch (error) {
-              console.error('Error starting drag:', error);
-              isDragging = false;
-            }
+            dragStartX = e.clientX;
+            dragStartY = e.clientY;
             
             // Prevent default behaviors
             e.preventDefault();
@@ -307,17 +305,27 @@
 
         // Handle drag end
         window.addEventListener('mouseup', () => {
-          isDragging = false;
-          initialClickOnNonTransparent = false;
+          if (isDragging) {
+            isDragging = false;
+            initialClickOnNonTransparent = false;
+            
+            // Update window size after drag ends
+            updateWindowSize();
+          }
         });
 
         // Also handle mouseup outside the window
         window.addEventListener('blur', () => {
-          isDragging = false;
-          initialClickOnNonTransparent = false;
+          if (isDragging) {
+            isDragging = false;
+            initialClickOnNonTransparent = false;
+            
+            // Update window size after drag ends
+            updateWindowSize();
+          }
         });
         
-        // Listen for key press to close window (only when over non-transparent pixels)
+        // Listen for key press to close window
         document.addEventListener('keydown', (e) => {
           if (e.key.toLowerCase() === 'w' && isOverNonTransparentPixel) {
             window.transparentWindow.close();
@@ -326,11 +334,21 @@
 
         // Add mouse wheel event for zooming
         document.addEventListener('wheel', (e) => {
+          // Only zoom if over the image or image container
           if (isOverNonTransparentPixel || e.target.closest('#image-container')) {
             // Prevent default scrolling behavior
             e.preventDefault();
             
-            // Store pre-zoom scale for relative positioning
+            // Get mouse position
+            const mouseX = e.clientX;
+            const mouseY = e.clientY;
+            
+            // Calculate image-space coordinates before zoom
+            const rect = imageEl.getBoundingClientRect();
+            const imgMouseX = (mouseX - rect.left) / scale;
+            const imgMouseY = (mouseY - rect.top) / scale;
+            
+            // Store old scale for calculation
             const oldScale = scale;
             
             // Calculate new scale based on wheel direction
@@ -344,26 +362,72 @@
             
             // Only proceed if scale actually changed
             if (oldScale !== scale) {
-              // Apply the new scale
-              applyScale();
+              // Calculate the new position to keep the mouse point fixed
+              imageX = mouseX - imgMouseX * scale;
+              imageY = mouseY - imgMouseY * scale;
+              
+              // Apply the new position and scale
+              updateImagePosition();
+              
+              // Update window size
+              updateWindowSize();
             }
           }
         }, { passive: false });
         
         // Add button controls
         zoomInBtn.addEventListener('click', () => {
+          // Calculate center point of visible image
+          const rect = imageEl.getBoundingClientRect();
+          const centerX = rect.left + rect.width / 2;
+          const centerY = rect.top + rect.height / 2;
+          
+          // Store img-space coordinates
+          const imgCenterX = (centerX - imageX) / scale;
+          const imgCenterY = (centerY - imageY) / scale;
+          
+          // Update scale
+          const oldScale = scale;
           scale = Math.min(scale + scaleStep, maxScale);
-          applyScale();
+          
+          if (oldScale !== scale) {
+            // Update position to keep center point fixed
+            imageX = centerX - imgCenterX * scale;
+            imageY = centerY - imgCenterY * scale;
+            
+            updateImagePosition();
+            updateWindowSize();
+          }
         });
         
         zoomOutBtn.addEventListener('click', () => {
+          // Calculate center point of visible image
+          const rect = imageEl.getBoundingClientRect();
+          const centerX = rect.left + rect.width / 2;
+          const centerY = rect.top + rect.height / 2;
+          
+          // Store img-space coordinates
+          const imgCenterX = (centerX - imageX) / scale;
+          const imgCenterY = (centerY - imageY) / scale;
+          
+          // Update scale
+          const oldScale = scale;
           scale = Math.max(scale - scaleStep, minScale);
-          applyScale();
+          
+          if (oldScale !== scale) {
+            // Update position to keep center point fixed
+            imageX = centerX - imgCenterX * scale;
+            imageY = centerY - imgCenterY * scale;
+            
+            updateImagePosition();
+            updateWindowSize();
+          }
         });
         
         zoomResetBtn.addEventListener('click', () => {
           scale = 1;
-          applyScale();
+          centerImage();
+          updateWindowSize();
         });
         
         closeBtn.addEventListener('click', () => {
@@ -372,8 +436,11 @@
         
         // Handle window resize events
         window.addEventListener('resize', () => {
-          // Update the viewport center when window is resized
-          updateViewportCenter();
+          // We don't need to recenter the image - keep it where it is
+          // Just update the window size if needed
+          if (!resizeTimeout) {
+            updateWindowSize();
+          }
         });
       }
     </script>
