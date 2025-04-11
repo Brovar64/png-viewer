@@ -9,6 +9,8 @@ An Electron + React application for browsing PNG files in a selected folder.
 - Show image file name and size
 - Zoom in/out of images using the mouse wheel
 - Drag transparent PNGs by their visible parts
+- Auto-crop transparent PNG images to optimize window size
+- 1px red outline around all PNG images for better visibility
 - Simple and intuitive user interface
 
 ## Installation
@@ -36,6 +38,8 @@ The application will launch and you can click the "Select PNG Folder" button to 
 ### Viewing and Interacting with Images
 
 - Click on any thumbnail to open the image in a dedicated transparent window
+- PNG images are automatically cropped to their visible content for optimal display
+- PNG images have a 1px red outline for better visibility
 - Use the mouse wheel to zoom in/out of the image
 - Drag the image by clicking and holding on any non-transparent part
 - Press 'W' key while hovering over the image to close the window
@@ -54,6 +58,7 @@ The packaged application will be available in the `dist` directory.
 - Electron: Desktop application framework
 - React: UI library
 - TailwindCSS: Utility-first CSS framework
+- Jimp: Pure JavaScript image processing library for transparency detection
 
 ## License
 
