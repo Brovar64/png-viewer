@@ -28,7 +28,7 @@ function createWindow() {
 
   if (isDev) {
     // Uncomment this line if you need DevTools
-    // mainWindow.webContents.openDevTools();
+    mainWindow.webContents.openDevTools();
   }
 
   mainWindow.on('closed', () => {
@@ -39,6 +39,21 @@ function createWindow() {
 app.whenReady().then(() => {
   createWindow();
   setupTransparentWindowHandlers();
+  
+  // Add custom protocol for serving OpenSeadragon resources
+  if (isDev) {
+    // In development, files are served from node_modules
+    protocol.registerFileProtocol('openseadragon', (request, callback) => {
+      const url = request.url.replace('openseadragon://', '');
+      callback(path.normalize(`${app.getAppPath()}/node_modules/openseadragon/build/openseadragon/${url}`));
+    });
+  } else {
+    // In production, files should be bundled with the app
+    protocol.registerFileProtocol('openseadragon', (request, callback) => {
+      const url = request.url.replace('openseadragon://', '');
+      callback(path.normalize(`${app.getAppPath()}/resources/openseadragon/${url}`));
+    });
+  }
 });
 
 app.on('window-all-closed', () => {
