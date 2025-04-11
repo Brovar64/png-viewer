@@ -199,6 +199,32 @@ function setupTransparentWindowHandlers() {
       console.error('Error in window:resize handler:', error);
     }
   });
+  
+  // New handler for resize and position in a single operation
+  ipcMain.on('window:resizeAndPosition', (event, { width, height, x, y }) => {
+    try {
+      const webContents = event.sender;
+      const win = BrowserWindow.fromWebContents(webContents);
+      if (!win) return;
+      
+      // Ensure values are numbers
+      const newWidth = Math.max(200, Number(width) || 600);
+      const newHeight = Math.max(200, Number(height) || 600);
+      const newX = Number(x) || 0;
+      const newY = Number(y) || 0;
+      
+      // Set bounds directly 
+      win.setBounds({
+        x: newX,
+        y: newY,
+        width: newWidth,
+        height: newHeight
+      }, false); // false = no animation for instant positioning
+      
+    } catch (error) {
+      console.error('Error in window:resizeAndPosition handler:', error);
+    }
+  });
 
   // Handle window close
   ipcMain.on('window:close', (event) => {
