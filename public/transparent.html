@@ -105,7 +105,7 @@
       let isOverNonTransparentPixel = false;
       let imagePath = '';
       
-      // For dragging
+      // For dragging window
       let isDragging = false;
       let dragStartX = 0;
       let dragStartY = 0;
@@ -116,8 +116,8 @@
       const minScale = 0.1;
       const maxScale = 10;
       const scaleStep = 0.1;
-      
-      // For image panning (when zoomed in)
+
+      // For image panning
       let imageX = 0;
       let imageY = 0;
       let isPanning = false;
@@ -142,26 +142,25 @@
           // Set initial scale
           updateImageTransform();
           
-          // Make the window very large to avoid cropping on zoom
-          // Use the larger of:
-          // 1. 1.5x the screen dimensions
-          // 2. At least 4000x4000 (which should be big enough for most cases)
+          // Set fixed, optimized window size - not too large
+          const padding = 20;
+          const initialWidth = Math.min(window.screen.availWidth * 0.8, 
+                                     imageEl.naturalWidth + padding * 2);
+          const initialHeight = Math.min(window.screen.availHeight * 0.8, 
+                                      imageEl.naturalHeight + padding * 2);
+          
+          // Position window on screen
           const screenWidth = window.screen.availWidth;
           const screenHeight = window.screen.availHeight;
+          const initialX = Math.max(0, (screenWidth - initialWidth) / 2);
+          const initialY = Math.max(0, (screenHeight - initialHeight) / 2);
           
-          const largeWindowWidth = Math.max(screenWidth * 1.5, 4000);
-          const largeWindowHeight = Math.max(screenHeight * 1.5, 4000);
-          
-          // Set initial window position to center on screen
-          const initialX = Math.max(0, (screenWidth - imageEl.naturalWidth) / 2);
-          const initialY = Math.max(0, (screenHeight - imageEl.naturalHeight) / 2);
-          
-          // Set the window size once to a very large size (and center window on image)
-          window.transparentWindow.resizeAndPosition(
-            largeWindowWidth, 
-            largeWindowHeight,
-            initialX - (largeWindowWidth - imageEl.naturalWidth) / 2,
-            initialY - (largeWindowHeight - imageEl.naturalHeight) / 2
+          // Set the initial window size once
+          window.transparentWindow.setBounds(
+            initialWidth, 
+            initialHeight,
+            initialX,
+            initialY
           );
 
           // Initialize interaction handlers
@@ -169,7 +168,7 @@
         };
       });
       
-      // Apply scale and position without changing the centered position
+      // Apply scale and position
       function updateImageTransform() {
         imageEl.style.transform = `translate(${imageX}px, ${imageY}px) scale(${scale})`;
       }
@@ -222,7 +221,7 @@
             return;
           }
           
-          // If window dragging is in progress
+          // If dragging is in progress
           if (isDragging) {
             try {
               // Calculate how much the mouse has moved
@@ -242,7 +241,7 @@
             return;
           }
           
-          // If image panning is in progress
+          // If panning is in progress
           if (isPanning) {
             // Calculate the change in mouse position
             const deltaX = e.clientX - panStartX;
@@ -279,7 +278,7 @@
           
           if (initialClickOnNonTransparent) {
             // If zoomed in, start panning the image instead of moving the window
-            if (scale > 1.1) {
+            if (scale > 1.05) {
               isPanning = true;
               panStartX = e.clientX;
               panStartY = e.clientY;
@@ -337,8 +336,14 @@
             
             // Calculate image-space coordinates before zoom
             const rect = imageEl.getBoundingClientRect();
-            const imgMouseX = (mouseX - rect.left - imageX) / scale;
-            const imgMouseY = (mouseY - rect.top - imageY) / scale;
+            
+            // Get the position of the cursor relative to the image origin
+            const cursorToImageX = mouseX - (rect.left + imageX);
+            const cursorToImageY = mouseY - (rect.top + imageY);
+            
+            // Convert to ratio of the current scaled size
+            const ratioX = cursorToImageX / (imageEl.width * scale);
+            const ratioY = cursorToImageY / (imageEl.height * scale);
             
             // Store old scale for calculation
             const oldScale = scale;
@@ -354,9 +359,10 @@
             
             // Only proceed if scale actually changed
             if (oldScale !== scale) {
-              // Calculate the new position to keep the mouse point fixed
-              imageX = mouseX - imgMouseX * scale;
-              imageY = mouseY - imgMouseY * scale;
+              // Calculate the new position to keep the cursor at the same point in the image
+              // This uses the ratio to maintain the same relative position
+              imageX = mouseX - (ratioX * imageEl.width * scale);
+              imageY = mouseY - (ratioY * imageEl.height * scale);
               
               // Apply the new position and scale
               updateImageTransform();
@@ -368,43 +374,63 @@
         zoomInBtn.addEventListener('click', () => {
           // Calculate center point of image
           const rect = imageEl.getBoundingClientRect();
-          const centerX = rect.left + rect.width / 2;
-          const centerY = rect.top + rect.height / 2;
+          const centerX = window.innerWidth / 2;
+          const centerY = window.innerHeight / 2;
           
-          // Calculate image-space coordinates
-          const imgCenterX = (centerX - imageX) / scale;
-          const imgCenterY = (centerY - imageY) / scale;
+          // Store the current scale
+          const oldScale = scale;
           
           // Update scale
           scale = Math.min(scale + scaleStep, maxScale);
           
-          // Calculate the new position to keep center point fixed
-          imageX = centerX - imgCenterX * scale;
-          imageY = centerY - imgCenterY * scale;
-          
-          // Apply the new position and scale
-          updateImageTransform();
+          // Only proceed if scale actually changed
+          if (oldScale !== scale) {
+            // Get the center position of the image
+            const imageCenterX = rect.left + rect.width / 2 + imageX;
+            const imageCenterY = rect.top + rect.height / 2 + imageY;
+            
+            // Calculate the difference between window center and image center
+            const deltaX = centerX - imageCenterX;
+            const deltaY = centerY - imageCenterY;
+            
+            // Adjust the image position to maintain center
+            imageX += deltaX * (1 - (oldScale / scale));
+            imageY += deltaY * (1 - (oldScale / scale));
+            
+            // Apply the transformation
+            updateImageTransform();
+          }
         });
         
         zoomOutBtn.addEventListener('click', () => {
           // Calculate center point of image
           const rect = imageEl.getBoundingClientRect();
-          const centerX = rect.left + rect.width / 2;
-          const centerY = rect.top + rect.height / 2;
+          const centerX = window.innerWidth / 2;
+          const centerY = window.innerHeight / 2;
           
-          // Calculate image-space coordinates
-          const imgCenterX = (centerX - imageX) / scale;
-          const imgCenterY = (centerY - imageY) / scale;
+          // Store the current scale
+          const oldScale = scale;
           
           // Update scale
           scale = Math.max(scale - scaleStep, minScale);
           
-          // Calculate the new position to keep center point fixed
-          imageX = centerX - imgCenterX * scale;
-          imageY = centerY - imgCenterY * scale;
-          
-          // Apply the new position and scale
-          updateImageTransform();
+          // Only proceed if scale actually changed
+          if (oldScale !== scale) {
+            // Get the center position of the image
+            const imageCenterX = rect.left + rect.width / 2 + imageX;
+            const imageCenterY = rect.top + rect.height / 2 + imageY;
+            
+            // Calculate the difference between window center and image center
+            const deltaX = centerX - imageCenterX;
+            const deltaY = centerY - imageCenterY;
+            
+            // Adjust the image position to maintain center
+            imageX += deltaX * (1 - (oldScale / scale));
+            imageY += deltaY * (1 - (oldScale / scale));
+            
+            // Apply the transformation
+            updateImageTransform();
+          }
         });
         
         zoomResetBtn.addEventListener('click', () => {
